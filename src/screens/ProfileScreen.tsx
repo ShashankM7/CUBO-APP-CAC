@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { ScreenShell } from '../components/ScreenShell';
+import { AppInviteSheet } from '../components/AppInviteSheet';
 import { MapSourcePreference } from '../components/MapSourcePreference';
 import { MediaAccessPreference } from '../components/MediaAccessPreference';
 import type { RootStackParamList } from '../navigation/types';
@@ -19,6 +20,7 @@ export function ProfileScreen() {
   const { profile } = useProfile();
   const { colors, preference, setMode } = useAppearance();
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [notifications, setNotifications] = useState(true);
   const [tripReports, setTripReports] = useState(true);
@@ -63,10 +65,12 @@ export function ProfileScreen() {
 
     <Text style={styles.section}>Support</Text>
     <View style={styles.group}>
+      <SettingsRow icon="paper-plane-outline" title="Invite someone" detail="Share CUBO and a quick setup guide" onPress={() => setInviteOpen(true)} colors={colors} styles={styles} />
       <SettingsRow icon="help-circle-outline" title="Help and feedback" onPress={() => navigation.navigate('SettingsDetail', { kind: 'help' })} colors={colors} styles={styles} />
       <SettingsRow icon="information-circle-outline" title="About CUBO" detail="Our mission and team" onPress={() => navigation.navigate('SettingsDetail', { kind: 'about' })} colors={colors} styles={styles} last />
     </View>
     <Pressable onPress={() => void signOut()} style={styles.signOut}><Ionicons name="log-out-outline" size={18} color={colors.danger} /><View style={styles.fill}><Text style={styles.signOutText}>Log out</Text><Text style={styles.rowDetail}>{user?.email}</Text></View></Pressable>
+    {inviteOpen ? <AppInviteSheet name={profile.name} onClose={() => setInviteOpen(false)} /> : null}
   </ScreenShell>;
 }
 
