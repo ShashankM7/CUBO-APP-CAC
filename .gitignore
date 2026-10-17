@@ -30,8 +30,41 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Environment values stay local; committed examples must contain placeholders only.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Local agent state, authentication caches, and validation worktrees
+.codex/
+.validation/
+.aws/
+.ssh/
+.azure/
+.config/gcloud/
+.wrangler/
+.firebase/
+
+# Private credential exports (not Firebase's public client configuration)
+credentials.json
+*service-account*.json
+*service_account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+*.pfx
+*.keystore
+id_rsa
+id_ecdsa
+id_ed25519
+
+# Local test exports, screenshots, and service debug logs
+/dist-*-check/
+/cubo-*-preview.png
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
 # typescript
 *.tsbuildinfo
