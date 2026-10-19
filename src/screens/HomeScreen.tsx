@@ -22,6 +22,7 @@ import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { useAppearance } from '../theme/AppearanceContext';
 import type { AppColors } from '../theme/colors';
 import { readCalibration, type CalibrationRecord } from '../features/calibration/calibrationStatus';
+import { useAppBlocking } from '../features/appBlocking/AppBlockingContext';
 
 export function HomeScreen() {
   const { colors: c } = useAppearance();
@@ -31,10 +32,11 @@ export function HomeScreen() {
   const { profile } = useProfile(); const { vehicles, setPrimary } = useVehicles();
   const { activeSession } = useDrives(); const places = usePlaces();
   const family = useFamily();
+  const appBlocking = useAppBlocking();
   const [inviteOpen, setInviteOpen] = useState(false);
   const insurance = useInsurance();
   const insurer = insurance.providerId === 'other' && insurance.customProviderName?.trim() ? { name: insurance.customProviderName.trim() } : insuranceProviders.find(p => p.id === insurance.providerId);
-  const unreadCount = family.notifications.filter(item => !item.read).length + 3 - family.demoReadIds.length;
+  const unreadCount = family.notifications.filter(item => !item.read).length + 3 - family.demoReadIds.length + appBlocking.notices.filter(item => !item.read).length;
   const [calibration, setCalibration] = useState<CalibrationRecord | null>(null);
   useFocusEffect(useCallback(() => { let active = true; void readCalibration().then(value => { if (active) setCalibration(value); }); return () => { active = false; }; }, []));
   const selected = vehicles.find(v => v.primary) ?? vehicles[0];

@@ -14,6 +14,7 @@ import { FamilyAvatar } from './FamilyAvatar';
 import { TripRouteSnapshot } from './TripRouteSnapshot';
 import { DemoLiveMap } from './DemoLiveMap';
 import { DemoFamilyInsurance } from './DemoFamilyInsurance';
+import { DrivingAppLimitsCard } from './DrivingAppLimitsCard';
 
 export function DemoFamilyProfile({ member, navigation }: { member: typeof demoFamily[number]; navigation: NativeStackNavigationProp<RootStackParamList, 'FamilyMember'> }) {
   const { colors: c } = useAppearance();
@@ -41,6 +42,7 @@ export function DemoFamilyProfile({ member, navigation }: { member: typeof demoF
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}><Text style={{ color: '#FFFFFF', fontSize: 52, fontFamily: 'Manrope_800ExtraBold' }}>{member.score}</Text><View style={{ flex: 1 }}><Text style={{ color: '#FFFFFF', fontFamily: 'Manrope_700Bold', fontSize: 17 }}>{member.score >= 90 ? 'Steady driving' : 'Room to improve'}</Text><Text style={{ color: '#D1E3D7', fontSize: 12, lineHeight: 18 }}>Attention and consistency across sample trips.</Text></View></View>
     </View>
     <View style={{ flexDirection: 'row', gap: 8 }}>{[[Math.floor(member.minutes / 60) + 'h ' + member.minutes % 60 + 'm', 'Drive time'], [String(member.miles), 'Miles'], [String(member.trips), 'Trips']].map(([value, label]) => <View key={label} style={{ flex: 1, paddingVertical: 16, borderRadius: 16, backgroundColor: c.card, alignItems: 'center', gap: 4 }}><Text style={{ color: c.text, fontSize: 17, fontFamily: 'Manrope_800ExtraBold' }}>{value}</Text><Text style={body}>{label}</Text></View>)}</View>
+    {!member.adult ? <DrivingAppLimitsCard targetUid={member.uid} targetName={member.name} navigation={navigation} /> : null}
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Text style={heading}>{sharing ? 'Driving now' : 'Location sharing'}</Text><Ionicons name={sharing ? 'navigate-circle' : 'lock-closed-outline'} size={24} color={c.accent} /></View>
     {sharing ? <>
       <Text style={body}>Child 2 has location sharing enabled in this demo. Downtown Raleigh · {progress >= 1 ? 'Trip complete' : 'Simulated trip in progress'}</Text>

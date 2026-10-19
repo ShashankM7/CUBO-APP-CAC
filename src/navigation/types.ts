@@ -33,5 +33,5 @@ export type RootStackParamList = {
   DetectionLive: { vehicleId: string };
   DriverReports: { driverId: string };
   Profile: undefined;
-  AppBlocking: undefined;
+  AppBlocking: { targetUid?: string; targetName?: string; parentManaged?: boolean } | undefined;
 };

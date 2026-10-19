@@ -24,6 +24,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { useAppearance } from '../theme/AppearanceContext';
 import type { AppColors } from '../theme/colors';
 import { spacing } from '../theme/theme';
+import { useAppBlocking, type DriveBlockPlan } from '../features/appBlocking/AppBlockingContext';
+import { DriveBlockModal } from '../components/DriveBlockModal';
 
 const fallbackRegion: Region = { latitude: 35.7796, longitude: -78.6382, latitudeDelta: .035, longitudeDelta: .035 };
 const hazardMeta: Record<RoadHazardKind, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
@@ -90,6 +92,7 @@ export function MapScreen() {
   const [promptDismissed, setPromptDismissed] = useState<Set<string>>(new Set());
   const closestReports = useRef(new Map<string, number>());
   const { activeSession, sessions, startDrive, addEvent, addRoutePoint, updateDrive, endDrive, cameraConfirmation } = useDrives();
+  const { beginDrive: beginAppBlocking, endDrive: endAppBlocking } = useAppBlocking();
   const { colors, mode } = useAppearance();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const mapRef = useRef<DrivingMapHandle>(null);
@@ -120,6 +123,7 @@ export function MapScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [hazardMenu, setHazardMenu] = useState(false);
   const [hazardSaved, setHazardSaved] = useState<RoadHazardKind | null>(null);
+  const [driveBlockPlan, setDriveBlockPlan] = useState<DriveBlockPlan | null>(null);
   const pipPosition = useRef(new Animated.ValueXY({ x: Math.max(16, width - 128), y: 104 })).current;
   const pipOrigin = useRef({ x: Math.max(16, width - 128), y: 104 });
   const pipTop = topCardBottom + 12;
@@ -223,8 +227,8 @@ export function MapScreen() {
     if (!focused || awaitingCamera.current == null || cameraConfirmation <= awaitingCamera.current) return;
     awaitingCamera.current = null;
     distanceBaseline.current = gps.distanceMiles;
-    startDrive(); setNavigating(true); setFollowing(true); setStepIndex(0);
-  }, [cameraConfirmation, focused, startDrive]);
+    startDrive(); setDriveBlockPlan(beginAppBlocking()); setNavigating(true); setFollowing(true); setStepIndex(0);
+  }, [cameraConfirmation, focused, startDrive, beginAppBlocking]);
   const loadedDestination = useRef<string | null>(null);
   useEffect(() => {
     if (!destinationParam || !gps.point || loadedDestination.current === destinationParam.id || activeSession) return;
@@ -253,6 +257,7 @@ export function MapScreen() {
   };
 
   const finishDrive = () => {
+    endAppBlocking(); setDriveBlockPlan(null);
     const completed = endDrive();
     if (completed) setFinishedId(completed.id);
   };
@@ -337,6 +342,7 @@ export function MapScreen() {
       </View>
     </SafeAreaView>
     {hazardMenu ? <><Pressable style={styles.sheetBackdrop} onPress={() => setHazardMenu(false)} /><Reanimated.View entering={FadeInDown.duration(240).easing(Easing.out(Easing.cubic))} exiting={FadeOutDown.duration(180)} style={[styles.hazardSheet, { paddingBottom: Math.max(insets.bottom + 18, 34) }]}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><View><Text style={styles.sheetEyebrow}>LIVE ROAD REPORT</Text><Text style={styles.sheetTitle}>What’s ahead?</Text></View><Pressable style={styles.sheetClose} onPress={() => setHazardMenu(false)}><Ionicons name="close" size={18} color={colors.text} /></Pressable></View><Text style={styles.sheetBody}>CUBO pins the report at your current GPS position for this drive.</Text><View style={styles.hazardGrid}>{hazardOptions.map((option) => { const meta = hazardMeta[option.kind]; return <MotionPressable key={option.kind} style={styles.hazardOption} scaleTo={0.94} onPress={() => reportHazard(option.kind)}><View style={[styles.hazardOptionIcon, { backgroundColor: `${meta.color}18` }]}><Ionicons name={meta.icon} size={23} color={meta.color} /></View><Text style={styles.hazardOptionLabel}>{option.label}</Text><Text style={styles.hazardOptionDetail}>{option.detail}</Text></MotionPressable>; })}</View></Reanimated.View></> : null}
+    <DriveBlockModal plan={driveBlockPlan} onClose={() => setDriveBlockPlan(null)} />
   </View>;
 }
 
