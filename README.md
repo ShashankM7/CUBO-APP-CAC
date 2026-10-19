@@ -17,7 +17,7 @@ An **AI-powered driving safety app** that connects to the CUBO dash device to mo
 - **Distraction Time Tracking** — daily breakdowns of distraction events
 - **Goals & Insights** — actionable goals like minimizing phone distractions and keeping attention on the highway
 - **Trends Dashboard** — track distractions per minute over time
-- **App Focus Block** — block distracting apps while driving
+- **Blocked Apps** — choose distracting apps to restrict while driving
 - **Vehicle Management** — manage and monitor connected vehicles
 
 ## 🎥 App Demo

@@ -6,13 +6,13 @@ This release adds the CUBO policy and user experience for choosing apps that sho
 
 - Account-scoped Blocked Apps preferences stored locally for the signed-in user.
 - A premium app picker in **Account → Driving → Blocked apps**.
-- Parent-managed lists and a Parent lock option from minor family profiles.
+- Parent-managed lists and a Child Lock option from minor family profiles.
 - A minor-notification preview when a parent saves a policy.
-- A post-camera drive-start summary of the apps selected for that drive.
+- A centered three-second drive-start summary of the apps selected for that drive.
 - Drive-scoped state that is cleared when the drive ends.
 - Matching React Native and web behavior.
 
-The app list uses the icon assets already bundled in `assets/block-apps`, so this change adds only a small amount of code and saved JSON. It does not add a paid service or API.
+The app list uses bundled icon assets plus two built-in vector glyphs for Facebook and Telegram, so this change adds only a small amount of code and saved JSON. It does not add a paid service or API.
 
 ## Native enforcement still required
 

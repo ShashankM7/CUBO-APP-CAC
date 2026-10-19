@@ -10,7 +10,7 @@ export type AppBlockingPolicy = {
 };
 
 const appIds = new Set(BLOCK_APPS.map(app => app.id));
-export const popularBlockIds = ['instagram', 'tiktok', 'snapchat', 'youtube'];
+export const popularBlockIds = ['instagram', 'facebook', 'tiktok', 'snapchat', 'telegram', 'youtube'];
 
 export function cleanSelectedIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];

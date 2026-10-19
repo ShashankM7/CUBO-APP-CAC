@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { AppHeader } from '../components/AppHeader';
+import { BlockAppIcon } from '../components/BlockAppIcon';
 import { MotionPressable } from '../components/MotionPressable';
 import { ScreenShell } from '../components/ScreenShell';
 import { BLOCK_APPS } from '../data/blockApps';
@@ -24,10 +25,12 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
   const parentManaged = Boolean(route.params?.parentManaged);
   const [policy, setPolicy] = useState<AppBlockingPolicy>(() => policyFor(targetUid, targetName));
   const [saved, setSaved] = useState(false);
+  const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (hydrated) setPolicy(policyFor(targetUid, targetName));
   }, [hydrated, targetName, targetUid]);
+  useEffect(() => () => { if (returnTimer.current) clearTimeout(returnTimer.current); }, []);
 
   const readOnly = policy.lockedByParent && !parentManaged;
   const selected = new Set(policy.selectedIds);
@@ -37,7 +40,12 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
     setPolicy(current => ({ ...current, selectedIds: current.selectedIds.includes(id) ? current.selectedIds.filter(value => value !== id) : [...current.selectedIds, id] }));
   };
   const setPopular = () => { if (!readOnly) { setSaved(false); setPolicy(current => ({ ...current, selectedIds: popularBlockIds })); } };
-  const save = () => { savePolicy(policy, parentManaged); setSaved(true); };
+  const save = () => {
+    savePolicy(policy, parentManaged);
+    setSaved(true);
+    if (returnTimer.current) clearTimeout(returnTimer.current);
+    returnTimer.current = setTimeout(() => { if (navigation.canGoBack()) navigation.goBack(); }, 450);
+  };
 
   return <ScreenShell>
     <AppHeader title={parentManaged ? `${targetName}'s apps` : 'Blocked apps'} onBack={() => navigation.goBack()} />
@@ -52,16 +60,16 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
     </View>
 
     {parentManaged ? <View style={s.parentCard}>
-      <View style={s.parentIcon}><Ionicons name="people" size={20} color={c.accent} /></View>
-      <View style={s.fill}><Text style={s.cardTitle}>Parent-managed controls</Text><Text style={s.cardBody}>Turn on Parent lock to make this list read-only for {targetName}. They will receive a notification preview.</Text></View>
-      <Switch accessibilityLabel="Parent lock" value={policy.lockedByParent} onValueChange={lockedByParent => { setSaved(false); setPolicy(current => ({ ...current, lockedByParent })); }} trackColor={{ false: c.surfaceMuted, true: c.accent }} thumbColor="#FFFFFF" />
-    </View> : readOnly ? <View style={s.parentCard}><View style={s.parentIcon}><Ionicons name="lock-closed" size={20} color={c.accent} /></View><View style={s.fill}><Text style={s.cardTitle}>Managed by your parent</Text><Text style={s.cardBody}>Your family organizer controls this drive list.</Text></View></View> : null}
+      <View style={s.parentIcon}><Ionicons name="lock-closed" size={20} color={c.accent} /></View>
+      <View style={s.fill}><Text style={s.cardTitle}>Child Lock</Text><Text style={s.cardBody}>Turn on Child Lock to make this list read-only for {targetName}. They will receive a notification preview.</Text></View>
+      <Switch accessibilityLabel="Child Lock" value={policy.lockedByParent} onValueChange={lockedByParent => { setSaved(false); setPolicy(current => ({ ...current, lockedByParent })); }} trackColor={{ false: c.surfaceMuted, true: c.accent }} thumbColor="#FFFFFF" />
+    </View> : readOnly ? <View style={s.parentCard}><View style={s.parentIcon}><Ionicons name="lock-closed" size={20} color={c.accent} /></View><View style={s.fill}><Text style={s.cardTitle}>Child Lock is on</Text><Text style={s.cardBody}>Your family organizer controls this drive list.</Text></View></View> : null}
 
     <View style={s.sectionHeader}><View><Text style={s.sectionTitle}>Choose apps</Text><Text style={s.sectionBody}>Tap an app to add or remove it.</Text></View><View style={s.quickActions}><Pressable disabled={readOnly} onPress={setPopular} style={s.quick}><Text style={s.quickText}>Social</Text></Pressable><Pressable disabled={readOnly} onPress={() => { setSaved(false); setPolicy(current => ({ ...current, selectedIds: [] })); }} style={s.quick}><Text style={s.quickText}>Clear</Text></Pressable></View></View>
     <View style={s.grid}>{BLOCK_APPS.map(app => {
       const on = selected.has(app.id);
       return <Pressable key={app.id} accessibilityRole="checkbox" accessibilityState={{ checked: on, disabled: readOnly }} onPress={() => toggleApp(app.id)} style={[s.appTile, on && s.appTileOn, readOnly && s.disabled]}>
-        <View><Image source={app.icon} style={s.appIcon} /><View style={[s.check, on && s.checkOn]}>{on ? <Ionicons name="checkmark" size={13} color={c.onAccent} /> : null}</View></View>
+        <View><BlockAppIcon app={app} size={48} /><View style={[s.check, on && s.checkOn]}>{on ? <Ionicons name="checkmark" size={13} color={c.onAccent} /> : null}</View></View>
         <Text numberOfLines={1} style={s.appName}>{app.name}</Text>
       </Pressable>;
     })}</View>
@@ -75,6 +83,6 @@ const styles = (c: AppColors) => StyleSheet.create({
   fill: { flex: 1 }, hero: { backgroundColor: c.featureSurface, borderRadius: 26, padding: 20, borderWidth: 1, borderColor: c.borderStrong, gap: 14 }, heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 }, shield: { width: 48, height: 48, borderRadius: 17, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }, eyebrow: { color: c.accent, fontFamily: 'Manrope_800ExtraBold', fontSize: 9, letterSpacing: 1.25 }, heroTitle: { color: c.featureText, fontFamily: 'Manrope_800ExtraBold', fontSize: 18, marginTop: 3 }, heroBody: { color: c.featureMuted, fontSize: 12, lineHeight: 18 }, statusRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, status: { color: c.featureText, fontFamily: 'Manrope_700Bold', fontSize: 11 },
   parentCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.card, borderRadius: 20, borderWidth: 1, borderColor: c.borderStrong, padding: 16 }, parentIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }, cardTitle: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 13 }, cardBody: { color: c.textSecondary, fontSize: 10, lineHeight: 15, marginTop: 3 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }, sectionTitle: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 19 }, sectionBody: { color: c.textSecondary, fontSize: 11, marginTop: 3 }, quickActions: { flexDirection: 'row', gap: 6 }, quick: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.accentSoft }, quickText: { color: c.accent, fontFamily: 'Manrope_700Bold', fontSize: 11 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, appTile: { width: '31%', minHeight: 112, backgroundColor: c.card, borderRadius: 19, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 10 }, appTileOn: { borderColor: c.accent, backgroundColor: c.accentSoft }, appIcon: { width: 48, height: 48, borderRadius: 14 }, appName: { color: c.text, fontFamily: 'Manrope_700Bold', fontSize: 11, maxWidth: '100%' }, check: { position: 'absolute', right: -7, bottom: -5, width: 22, height: 22, borderRadius: 11, backgroundColor: c.card, borderWidth: 2, borderColor: c.border, alignItems: 'center', justifyContent: 'center' }, checkOn: { backgroundColor: c.accent, borderColor: c.card },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, appTile: { width: '31%', minHeight: 112, backgroundColor: c.card, borderRadius: 19, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 10 }, appTileOn: { borderColor: c.accent, backgroundColor: c.accentSoft }, appName: { color: c.text, fontFamily: 'Manrope_700Bold', fontSize: 11, maxWidth: '100%' }, check: { position: 'absolute', right: -7, bottom: -5, width: 22, height: 22, borderRadius: 11, backgroundColor: c.card, borderWidth: 2, borderColor: c.border, alignItems: 'center', justifyContent: 'center' }, checkOn: { backgroundColor: c.accent, borderColor: c.card },
   preview: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', borderRadius: 18, padding: 16, backgroundColor: c.amberSoft }, save: { minHeight: 54, borderRadius: 17, backgroundColor: c.accent, flexDirection: 'row', gap: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }, saveText: { color: c.onAccent, fontFamily: 'Manrope_800ExtraBold', fontSize: 13 }, disabled: { opacity: .48 },
 });
