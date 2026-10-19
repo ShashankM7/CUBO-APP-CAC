@@ -16,11 +16,11 @@ export function DrivingAppLimitsCard({ targetUid, targetName, navigation, parent
   return <View style={[s.card, { backgroundColor: c.card, borderColor: c.borderStrong }]}>
     <View style={[s.icon, { backgroundColor: c.accentSoft }]}><Ionicons name="shield-checkmark" size={23} color={c.accent} /></View>
     <View style={s.fill}>
-      <Text style={[s.title, { color: c.text }]}>Driving app limits</Text>
+      <Text style={[s.title, { color: c.text }]}>{`Manage ${targetName}'s Blocked Apps`}</Text>
       <Text style={[s.body, { color: c.textSecondary }]}>{policy.enabled ? `${apps.length} apps selected${policy.lockedByParent ? ' · Child Lock on' : ''}` : 'No blocked apps list enabled'}</Text>
       {apps.length ? <View style={s.icons}>{apps.slice(0, 5).map(app => <BlockAppIcon key={app.id} app={app} size={25} borderColor={c.card} borderWidth={2} style={{ marginRight: -5 }} />)}{apps.length > 5 ? <Text style={[s.more, { color: c.textSecondary }]}>+{apps.length - 5}</Text> : null}</View> : null}
     </View>
-    <MotionPressable accessibilityLabel={`Manage driving app limits for ${targetName}`} onPress={() => navigation.navigate('AppBlocking', { targetUid, targetName, parentManaged })} style={[s.manage, { backgroundColor: c.accentSoft }]}><Text style={[s.manageText, { color: c.accent }]}>Manage</Text></MotionPressable>
+    <MotionPressable accessibilityLabel={`Manage ${targetName}'s Blocked Apps`} onPress={() => navigation.navigate('AppBlocking', { targetUid, targetName, parentManaged })} style={[s.manage, { backgroundColor: c.accentSoft }]}><Text style={[s.manageText, { color: c.accent }]}>Manage</Text></MotionPressable>
   </View>;
 }
 

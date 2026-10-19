@@ -43,11 +43,15 @@ test('UI is honest about the native enforcement boundary', () => {
   assert.match(modal, /justifyContent: 'center'/);
   assert.match(modal, /translateY[\s\S]*-40/);
   assert.match(screen, /Child Lock/);
+  assert.match(screen, /Turn off Blocked Apps/);
+  assert.match(screen, /Turn on Blocked Apps/);
   assert.match(screen, /setTimeout[\s\S]*navigation\.goBack/);
   assert.doesNotMatch(screen, /Parent lock/i);
   const catalog = fs.readFileSync('src/data/blockApps.ts', 'utf8');
   assert.match(catalog, /name: 'Facebook'/);
   assert.match(catalog, /name: 'Telegram'/);
   assert.doesNotMatch(screen, /Apps are blocked/);
+  assert.match(fs.readFileSync('src/components/DrivingAppLimitsCard.tsx', 'utf8'), /Manage \$\{targetName\}'s Blocked Apps/);
+  assert.doesNotMatch(fs.readFileSync('src/features/appBlocking/AppBlockingContext.tsx', 'utf8'), /Driving app limits updated/);
   for (const file of ['src/screens/AppBlockingScreen.tsx', 'src/screens/ProfileScreen.tsx', 'src/screens/NotificationsScreen.tsx', 'src/components/DrivingAppLimitsCard.tsx']) assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /Drive Focus/i);
 });

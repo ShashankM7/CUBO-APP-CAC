@@ -48,11 +48,11 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
   };
 
   return <ScreenShell>
-    <AppHeader title={parentManaged ? `${targetName}'s apps` : 'Blocked apps'} onBack={() => navigation.goBack()} />
+    <AppHeader title={parentManaged ? `${targetName}'s Blocked Apps` : 'Blocked apps'} onBack={() => navigation.goBack()} />
     <View style={s.hero}>
       <View style={s.heroTop}>
         <View style={s.shield}><Ionicons name="shield-checkmark" size={25} color={c.accent} /></View>
-        <View style={s.fill}><Text style={s.eyebrow}>BLOCKED APPS</Text><Text style={s.heroTitle}>{policy.enabled ? 'Ready for each drive' : 'Set your blocked apps'}</Text></View>
+        <View style={s.fill}><Text style={s.eyebrow}>BLOCKED APPS</Text><Text style={s.heroTitle}>{policy.enabled ? 'Turn off Blocked Apps' : 'Turn on Blocked Apps'}</Text></View>
         <Switch accessibilityLabel="Use blocked apps list during drives" value={policy.enabled} disabled={readOnly} onValueChange={enabled => { setSaved(false); setPolicy(current => ({ ...current, enabled })); }} trackColor={{ false: c.surfaceMuted, true: c.accent }} thumbColor="#FFFFFF" />
       </View>
       <Text style={s.heroBody}>{policy.selectedIds.length ? `${policy.selectedIds.length} apps selected. CUBO will show this plan when a drive begins and clear it when the drive ends.` : 'Choose the apps that should be unavailable while you are driving.'}</Text>

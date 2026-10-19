@@ -51,7 +51,7 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
     if (!user || owner !== user.uid) return;
     const policy = makeBlockingPolicy(input.targetUid, input.targetName, { ...input, lockedByParent: parentManaged && input.lockedByParent, updatedAt: new Date().toISOString() });
     setPolicies(current => ({ ...current, [policy.targetUid]: policy }));
-    if (parentManaged) setNotices(current => [{ id: `block-${Date.now()}`, targetUid: policy.targetUid, targetName: policy.targetName, title: 'Driving app limits updated', body: `${policy.targetName}'s drive list now includes ${policy.selectedIds.length} app${policy.selectedIds.length === 1 ? '' : 's'}${policy.lockedByParent ? ' with Child Lock on' : ''}. This is a notification preview until family sync and phone controls are connected.`, createdAt: new Date().toISOString(), read: false }, ...current].slice(0, 30));
+    if (parentManaged) setNotices(current => [{ id: `block-${Date.now()}`, targetUid: policy.targetUid, targetName: policy.targetName, title: 'Blocked Apps updated', body: `${policy.targetName}'s drive list now includes ${policy.selectedIds.length} app${policy.selectedIds.length === 1 ? '' : 's'}${policy.lockedByParent ? ' with Child Lock on' : ''}. This is a notification preview until family sync and phone controls are connected.`, createdAt: new Date().toISOString(), read: false }, ...current].slice(0, 30));
   }, [owner, user?.uid]);
   const beginDrive = useCallback(() => {
     if (!user || owner !== user.uid) return null;
