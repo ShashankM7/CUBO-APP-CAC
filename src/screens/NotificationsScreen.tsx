@@ -36,7 +36,7 @@ export function NotificationsScreen({ navigation }: NativeStackScreenProps<RootS
     {family.notifications.map(notice => <MotionPressable key={notice.id} style={[s.card, !notice.read && s.unread]} onPress={() => navigation.navigate('Family')}><Text style={s.title}>{notice.title}</Text><Text style={s.body}>{notice.body}</Text><Text style={s.meta}>{new Date(notice.createdAt).toLocaleString()}</Text></MotionPressable>)}
     {appBlocking.notices.map(notice => <MotionPressable key={notice.id} style={[s.card, !notice.read && s.unread]} onPress={() => { appBlocking.markNoticesRead(notice.id); navigation.navigate('AppBlocking', { targetUid: notice.targetUid, targetName: notice.targetName, parentManaged: true }); }}>
       <View style={s.row}><View style={s.icon}><Ionicons name="shield-checkmark" size={22} color={c.accent} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.meta}>MINOR NOTIFICATION PREVIEW</Text><Text style={s.title}>{notice.title}</Text></View>{!notice.read && <View accessibilityLabel="Unread" style={s.dot} />}</View>
-      <Text style={s.body}>{notice.body}</Text><View style={s.row}><Text style={[s.link, { flex: 1 }]}>Review Drive Focus</Text><Ionicons name="chevron-forward" size={17} color={c.accent} /></View>
+      <Text style={s.body}>{notice.body}</Text><View style={s.row}><Text style={[s.link, { flex: 1 }]}>Review Blocked Apps</Text><Ionicons name="chevron-forward" size={17} color={c.accent} /></View>
     </MotionPressable>)}
     <Text style={s.section}>Demo updates</Text>
     <Text style={s.body}>Sample notifications to explore. No real alert, payment or permission change occurred.</Text>

@@ -44,7 +44,7 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
     <View style={s.hero}>
       <View style={s.heroTop}>
         <View style={s.shield}><Ionicons name="shield-checkmark" size={25} color={c.accent} /></View>
-        <View style={s.fill}><Text style={s.eyebrow}>DRIVE FOCUS</Text><Text style={s.heroTitle}>{policy.enabled ? 'Ready for each drive' : 'Set your focus list'}</Text></View>
+        <View style={s.fill}><Text style={s.eyebrow}>BLOCKED APPS</Text><Text style={s.heroTitle}>{policy.enabled ? 'Ready for each drive' : 'Set your blocked apps'}</Text></View>
         <Switch accessibilityLabel="Use blocked apps list during drives" value={policy.enabled} disabled={readOnly} onValueChange={enabled => { setSaved(false); setPolicy(current => ({ ...current, enabled })); }} trackColor={{ false: c.surfaceMuted, true: c.accent }} thumbColor="#FFFFFF" />
       </View>
       <Text style={s.heroBody}>{policy.selectedIds.length ? `${policy.selectedIds.length} apps selected. CUBO will show this plan when a drive begins and clear it when the drive ends.` : 'Choose the apps that should be unavailable while you are driving.'}</Text>
@@ -67,7 +67,7 @@ export function AppBlockingScreen({ navigation, route }: NativeStackScreenProps<
     })}</View>
 
     <View style={s.preview}><Ionicons name="construct-outline" size={20} color={c.amber} /><View style={s.fill}><Text style={s.cardTitle}>Phone controls come next</Text><Text style={s.cardBody}>This version saves the policy and drive flow. Actual iPhone and Android app blocking still requires their native family-control permissions.</Text></View></View>
-    <MotionPressable accessibilityRole="button" onPress={save} disabled={!hydrated || readOnly} style={[s.save, (!hydrated || readOnly) && s.disabled]}><Ionicons name={saved ? 'checkmark-circle' : 'shield-checkmark-outline'} size={20} color={c.onAccent} /><Text style={s.saveText}>{saved ? 'Drive Focus saved' : parentManaged ? `Save for ${targetName}` : 'Save Drive Focus'}</Text></MotionPressable>
+    <MotionPressable accessibilityRole="button" onPress={save} disabled={!hydrated || readOnly} style={[s.save, (!hydrated || readOnly) && s.disabled]}><Ionicons name={saved ? 'checkmark-circle' : 'shield-checkmark-outline'} size={20} color={c.onAccent} /><Text style={s.saveText}>{saved ? 'Blocked Apps saved' : parentManaged ? `Save for ${targetName}` : 'Save Blocked Apps'}</Text></MotionPressable>
   </ScreenShell>;
 }
 

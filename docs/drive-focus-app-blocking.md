@@ -1,10 +1,10 @@
-# Drive Focus app-blocking framework
+# Blocked Apps framework
 
 This release adds the CUBO policy and user experience for choosing apps that should be unavailable during a drive. It deliberately does not claim to enforce phone restrictions yet.
 
 ## Included now
 
-- Account-scoped Drive Focus preferences stored locally for the signed-in user.
+- Account-scoped Blocked Apps preferences stored locally for the signed-in user.
 - A premium app picker in **Account → Driving → Blocked apps**.
 - Parent-managed lists and a Parent lock option from minor family profiles.
 - A minor-notification preview when a parent saves a policy.

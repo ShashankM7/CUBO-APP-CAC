@@ -48,7 +48,7 @@ export function ProfileScreen() {
       <SettingsRow icon="time-outline" title="Drive history" detail="Scores, events, and coaching" onPress={() => navigation.navigate('Drives')} colors={colors} styles={styles} />
       <SettingsRow icon="scan-outline" title="Camera calibration" detail="Set your driver and cabin frame" onPress={() => navigation.navigate('CameraCalibration')} colors={colors} styles={styles} />
       <SettingsRow icon="hardware-chip-outline" title="Cubo Devices" detail="CUBO Cruise hardware and diagnostics" onPress={() => navigation.navigate('ConnectedDevices')} colors={colors} styles={styles} />
-      <SettingsRow icon="ban-outline" title="Blocked apps" detail="Choose your Drive Focus list" onPress={() => navigation.navigate('AppBlocking')} colors={colors} styles={styles} />
+      <SettingsRow icon="ban-outline" title="Blocked apps" detail="Choose apps to block while driving" onPress={() => navigation.navigate('AppBlocking')} colors={colors} styles={styles} />
       <SettingsRow icon="shield-checkmark-outline" title="Privacy and safety" detail="Video stays on this device" onPress={() => navigation.navigate('SettingsDetail', { kind: 'privacy' })} colors={colors} styles={styles} />
     </View>
 

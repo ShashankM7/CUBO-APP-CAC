@@ -16,7 +16,7 @@ export function DrivingAppLimitsCard({ targetUid, targetName, navigation, parent
     <View style={[s.icon, { backgroundColor: c.accentSoft }]}><Ionicons name="shield-checkmark" size={23} color={c.accent} /></View>
     <View style={s.fill}>
       <Text style={[s.title, { color: c.text }]}>Driving app limits</Text>
-      <Text style={[s.body, { color: c.textSecondary }]}>{policy.enabled ? `${apps.length} apps selected${policy.lockedByParent ? ' · Parent lock on' : ''}` : 'No Drive Focus list enabled'}</Text>
+      <Text style={[s.body, { color: c.textSecondary }]}>{policy.enabled ? `${apps.length} apps selected${policy.lockedByParent ? ' · Parent lock on' : ''}` : 'No blocked apps list enabled'}</Text>
       {apps.length ? <View style={s.icons}>{apps.slice(0, 5).map(app => <Image key={app.id} source={app.icon} style={[s.appIcon, { borderColor: c.card }]} />)}{apps.length > 5 ? <Text style={[s.more, { color: c.textSecondary }]}>+{apps.length - 5}</Text> : null}</View> : null}
     </View>
     <MotionPressable accessibilityLabel={`Manage driving app limits for ${targetName}`} onPress={() => navigation.navigate('AppBlocking', { targetUid, targetName, parentManaged })} style={[s.manage, { backgroundColor: c.accentSoft }]}><Text style={[s.manageText, { color: c.accent }]}>Manage</Text></MotionPressable>
