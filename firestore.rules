@@ -47,6 +47,20 @@ service cloud.firestore {
         && data.updatedAt is timestamp
         && (!('accountDetails' in data) || validAccountDetails(data.accountDetails));
     }
+    function isValidSyncDocument(domain, data) {
+      return domain in ['vehicles', 'places', 'insurance', 'blockedApps', 'drives', 'assistant']
+        && data.keys().hasAll(['schemaVersion', 'payload', 'updatedAt'])
+        && data.keys().hasOnly(['schemaVersion', 'payload', 'updatedAt'])
+        && data.schemaVersion is int && data.schemaVersion == 1
+        && data.payload is string
+        && ((domain == 'vehicles' && data.payload.size() <= 60000)
+          || (domain == 'places' && data.payload.size() <= 80000)
+          || (domain == 'insurance' && data.payload.size() <= 20000)
+          || (domain == 'blockedApps' && data.payload.size() <= 120000)
+          || (domain == 'drives' && data.payload.size() <= 700000)
+          || (domain == 'assistant' && data.payload.size() <= 500000))
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
 
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -60,6 +74,14 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
+
+      // Bounded JSON envelopes keep account sync inexpensive and make it
+      // impossible for one signed-in account to read or overwrite another.
+      match /sync/{domain} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidSyncDocument(domain, request.resource.data);
+        allow delete: if false;
+      }
     }
 
     match /{document=**} { allow read, write: if false; }

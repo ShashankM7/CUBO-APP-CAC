@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAccountSyncBridge } from '../sync/useAccountSyncBridge';
 
 export type InsuranceCadence = 'off' | 'weekly' | 'monthly';
 export type InsuranceSettings = { providerId: string | null; customProviderName?: string; cadence: InsuranceCadence; consent: boolean; lastSharedAt?: string; mode?: 'manual' | 'automatic' };
@@ -9,18 +10,25 @@ const initial: InsuranceSettings = { providerId: null, cadence: 'monthly', conse
 const InsuranceContext = createContext<InsuranceContextValue | null>(null);
 export const insuranceProviders = [{ id: 'state-farm', name: 'State Farm' }, { id: 'progressive', name: 'Progressive' }, { id: 'geico', name: 'GEICO' }, { id: 'allstate', name: 'Allstate' }, { id: 'other', name: 'Other insurer' }];
 
+function normalizeInsurance(value: unknown): InsuranceSettings {
+  const item = value && typeof value === 'object' ? value as Partial<InsuranceSettings> : {};
+  const providerId = item.providerId === null || insuranceProviders.some(provider => provider.id === item.providerId) ? item.providerId ?? null : null;
+  return { providerId, customProviderName: typeof item.customProviderName === 'string' ? item.customProviderName.slice(0, 80) : undefined, cadence: ['off', 'weekly', 'monthly'].includes(item.cadence ?? '') ? item.cadence! : 'monthly', consent: Boolean(item.consent), lastSharedAt: typeof item.lastSharedAt === 'string' ? item.lastSharedAt.slice(0, 40) : undefined, mode: item.mode === 'automatic' ? 'automatic' : 'manual' };
+}
+
 export function InsuranceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const uid = user?.uid;
   const [settings, setSettings] = useState<InsuranceSettings>(initial);
   const [owner, setOwner] = useState<string | undefined>();
+  const [hasLocalRecord, setHasLocalRecord] = useState(false);
   useEffect(() => {
     let active = true;
-    setOwner(undefined); setSettings(initial);
+    setOwner(undefined); setHasLocalRecord(false); setSettings(initial);
     if (!uid) return;
     // Never assign the old device-wide preferences/consent to an unknown account.
     AsyncStorage.getItem(`cubo-insurance:${uid}`).then(raw => {
-      if (active && raw) setSettings({ ...initial, ...JSON.parse(raw) });
+      if (active && raw) { setSettings({ ...initial, ...JSON.parse(raw) }); setHasLocalRecord(true); }
     }).catch(() => {}).finally(() => { if (active) setOwner(uid); });
     return () => { active = false; };
   }, [uid]);
@@ -28,6 +36,7 @@ export function InsuranceProvider({ children }: { children: ReactNode }) {
     if (!uid || owner !== uid) return;
     void AsyncStorage.setItem(`cubo-insurance:${uid}`, JSON.stringify(settings)).catch(() => {});
   }, [settings, owner, uid]);
+  useAccountSyncBridge({ uid, domain: 'insurance', ready: owner === uid, value: settings, normalize: normalizeInsurance, merge: (local) => local, mergeInitial: hasLocalRecord, onRemote: setSettings });
   const setCustomProviderName = useCallback((customProviderName: string) => setSettings(current => ({ ...current, customProviderName: customProviderName.slice(0, 80) })), []);
   const setProvider = useCallback((providerId: string | null) => setSettings((current) => ({ ...current, providerId })), []);
   const setMode = useCallback((mode: 'manual' | 'automatic') => setSettings(current => ({ ...current, mode })), []);

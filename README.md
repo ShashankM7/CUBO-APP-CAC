@@ -4,10 +4,13 @@
 
 - `main`: standalone web app, deployed to [CUBO on Cloudflare Pages](https://cubo-app-cac.pages.dev/).
 - `expo-version`: native Expo / Expo Go app, preserved separately from the web deployment.
-- `standaloneapp`: retained pre-migration web branch; new web work goes to `main`.
+- `standaloneapp`: synchronized web release branch for Cloudflare Pages.
+- `ui-expirements`: web UI sandbox based on the current release code.
 
 Use `npm start` on `expo-version`. Use `npm run build:web` on `main`.
 Shared fixes should be applied and tested in each platform branch; do not merge platform setup blindly.
+
+Signed-in account data uses bounded, owner-only Firestore records with an offline device copy. See [Account sync](docs/account-sync.md) for the exact synced and device-local boundaries.
 
 An **AI-powered driving safety app** that connects to the CUBO dash device to monitor distracted driving, track driver behavior, and give parents or users clear reports to improve safety.
 

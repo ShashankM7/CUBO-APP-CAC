@@ -10,6 +10,8 @@ import { useAuth } from '../auth/AuthContext';
 import { useFamily } from '../family/FamilyContext';
 import { familyRequest } from '../family/familyApi';
 import { recoverCheckpoint } from './driveCheckpoint';
+import { compactDriveSessions, mergeDriveSessions } from '../sync/domainData';
+import { useAccountSyncBridge } from '../sync/useAccountSyncBridge';
 
 type DriveContextValue = {
   activeSession: DriveSession | null;
@@ -42,18 +44,19 @@ export function DriveProvider({ children }: { children: ReactNode }) {
   const [activeSession, setActiveSession] = useState<DriveSession | null>(null);
   const [sessions, setSessions] = useState<DriveSession[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [hasLocalRecord, setHasLocalRecord] = useState(false);
   const [owner, setOwner] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [monitoringStatus, setMonitoringStatus] = useState('Monitoring not started');
   const writes = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => {
-    let mounted = true; setHydrated(false); setOwner(null); setSessions([]); setActiveSession(null); setCameraConfirmation(0); setPersistenceError(null);
+    let mounted = true; setHydrated(false); setHasLocalRecord(false); setOwner(null); setSessions([]); setActiveSession(null); setCameraConfirmation(0); setPersistenceError(null);
     if (!user) return;
     const restore = async () => {
       const checkpoint = await AsyncStorage.getItem(`cubo-drive-checkpoint:${user.uid}`);
       if (checkpoint) {
         const recovered = recoverCheckpoint(JSON.parse(checkpoint));
-        if (mounted) { setSessions(recovered); setOwner(user.uid); setHydrated(true); }
+        if (mounted) { setSessions(recovered); setHasLocalRecord(true); setOwner(user.uid); setHydrated(true); }
         return;
       }
       let saved = await AsyncStorage.getItem(`cubo-drive-sessions:${user.uid}`);
@@ -65,7 +68,7 @@ export function DriveProvider({ children }: { children: ReactNode }) {
           if (saved) window.localStorage.setItem('cubo-legacy-history-owner', user.uid);
         }
       }
-      if (mounted) { if (saved) setSessions((JSON.parse(saved) as DriveSession[]).map(session => ({ ...session, route: session.route ?? [] }))); setOwner(user.uid); setHydrated(true); }
+      if (mounted) { if (saved) { setSessions((JSON.parse(saved) as DriveSession[]).map(session => ({ ...session, route: session.route ?? [] }))); setHasLocalRecord(true); } setOwner(user.uid); setHydrated(true); }
     };
     void restore().catch(() => { if (mounted) setPersistenceError('Drive history could not be restored. Restart the app before starting another trip.'); });
     return () => { mounted = false; };
@@ -80,6 +83,7 @@ export function DriveProvider({ children }: { children: ReactNode }) {
     writes.current = writes.current.catch(() => undefined).then(() => AsyncStorage.setItem(key, value)).then(() => { if (current) setPersistenceError(null); }, () => { if (current) setPersistenceError('Trip recovery could not be saved. Check available device storage.'); });
     return () => { current = false; };
   }, [sessions, activeSession, hydrated, owner, user?.uid]);
+  useAccountSyncBridge({ uid: user?.uid, domain: 'drives', ready: hydrated && owner === user?.uid, value: sessions, normalize: compactDriveSessions, prepare: compactDriveSessions, merge: mergeDriveSessions, mergeInitial: hasLocalRecord, onRemote: setSessions, delayMs: 1200 });
   useEffect(() => {
     if (!hydrated || !family.configured || !family.organizerUid || !user) return;
     let active = true;

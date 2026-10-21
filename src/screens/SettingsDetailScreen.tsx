@@ -16,7 +16,7 @@ import { useProfile } from '../features/profile/ProfileContext';
 type Props = NativeStackScreenProps<RootStackParamList, 'SettingsDetail'>;
 const content = {
   edit: ['Edit profile', 'Manage your profile, account details, and sign-in security.'],
-  privacy: ['Privacy and safety', 'Camera frames are processed locally in the browser and are not stored. Trips retain scores, events, and route coordinates only.'],
+  privacy: ['Privacy and safety', 'Camera frames and raw microphone audio are processed on this device and are not stored in Firebase. Signed-in vehicles, saved places, insurance preferences, Blocked Apps settings, and bounded completed-trip records sync to your private account. Calibration, permissions, active-drive GPS, hardware pairing, map files, and profile photos remain device-specific.'],
   help: ['Help and feedback', 'Something not working? Tell us what happened, or share an idea for CUBO.'],
   about: ['About CUBO', 'Student-built driver safety for the Congressional App Challenge.'],
 } as const;

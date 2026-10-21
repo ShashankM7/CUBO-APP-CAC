@@ -17,12 +17,12 @@ https://developer.apple.com/documentation/corebluetooth/cbperipheral/rssi
 
 New registrations collect date of birth and a country-code phone number. Under 18 is a self-declared minor profile; this is not identity verification or an authorization claim.
 Phone numbers remain unverified. Guardian invitation delivery and acceptance are not enabled.
-Supplemental details are currently scoped to the signed-in UID in local AsyncStorage, not cloud-synced.
-The existing deployed users schema only permits six profile fields; adding private account data requires an owner-only cloud schema/rules migration and tests.
+Supplemental details are scoped to the signed-in UID. Profile/account details use the owner document; bounded app records use owner-only `users/{uid}/sync/{domain}` documents with a local offline copy.
+Camera calibration, permissions, profile photos, active-drive GPS, map files, hardware pairing, and WebLLM model files remain device-local by design.
 Never trust a client-side adult label to grant access. Never enable family location sharing without consent and server-enforced membership.
 
 ## Places and artwork
 
-Saved addresses, recent destinations and vehicle selections persist on this device per account.
+Saved addresses, the three most recent destinations, and vehicle selections sync with the signed-in account and retain a per-device offline copy.
 Photon provides GPS-biased suggestions and OSRM provides prototype routes; public endpoints have no availability guarantee and are not a production navigation SLA.
 The vehicle artwork is a generic generated compact-car illustration bundled into the app, not a paid runtime AI request or an exact manufacturer model.
