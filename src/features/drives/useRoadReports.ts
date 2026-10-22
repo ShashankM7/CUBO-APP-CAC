@@ -36,11 +36,15 @@ export function useRoadReports(point: Point | null, enabled: boolean) {
 
   const submit = async (kind: RoadHazardKind, location: Point) => {
     if (!user) return;
+    const coordinates = { latitude: location.latitude, longitude: location.longitude };
     const ref = doc(collection(db, 'roadReports'));
-    const report: RoadReport = { id: ref.id, reporterId: user.uid, kind, ...location, createdAtMs: Date.now(), localOnly: true };
+    const report: RoadReport = { id: ref.id, reporterId: user.uid, kind, ...coordinates, createdAtMs: Date.now(), localOnly: true };
     setLocal((current) => [...current, report]);
     try {
-      await setDoc(ref, { reporterId: user.uid, kind, ...location, cell: reportCell(location), createdAt: serverTimestamp(), confirmationCount: 0, active: true });
+      // A live GPS fix contains extra fields such as accuracy, heading, speed,
+      // and timestamp. Persist only the public hazard schema accepted by the
+      // strict Firestore rules; spreading the GPS object makes the write fail.
+      await setDoc(ref, { reporterId: user.uid, kind, ...coordinates, cell: reportCell(coordinates), createdAt: serverTimestamp(), confirmationCount: 0, active: true });
       setLocal((current) => current.map((item) => item.id === ref.id ? { ...item, localOnly: false } : item));
       setError('');
     } catch { setError('Saved to your trip. Sharing is currently unavailable.'); }
