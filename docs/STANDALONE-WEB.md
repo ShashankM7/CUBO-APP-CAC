@@ -1,7 +1,7 @@
 # CUBO standalone web deployment
 
-`main` is the web deployment branch. `standalone-new-ui` is its premium web-development counterpart.
-`standalone-old-ui` preserves the pre-redesign web interface, while `shashank-expo` preserves the Expo Go version.
+`main` is the web deployment branch. `shashank-new-ui` is its premium web-development counterpart.
+`shashank-old-ui` preserves the pre-redesign web interface, while `shashank-expo` preserves the Expo Go version.
 Expo still builds the source; visitors do not need Expo Go or a running laptop.
 
 ## Cloudflare Pages (free plan)
@@ -51,8 +51,8 @@ the laptop is off. Set up and interact only while parked.
   availability, usage policies and limits. Free frontend hosting does not remove
   those limits.
 
-Rollback: use an earlier successful Pages deployment or inspect `standalone-old-ui`.
-Keep current web code on `standalone-new-ui`/`main` and native-only setup on `shashank-expo`.
+Rollback: use an earlier successful Pages deployment or inspect `shashank-old-ui`.
+Keep current web code on `shashank-new-ui`/`main` and native-only setup on `shashank-expo`.
 
 ## Safari font/icon deployment regression
 

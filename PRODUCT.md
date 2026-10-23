@@ -27,7 +27,7 @@ The product is used on phones in portrait orientation, often in a vehicle. Impor
 - Preserve existing Firebase authentication, account sync, family and friend roles, permissions, hazard data, drive recording, maps, camera calibration, voice behavior, and WebLLM behavior.
 - Community hazards are shared with authenticated nearby users regardless of family or friend relationships.
 - New accounts begin with a starter safety score of 100 until measured drives update it.
-- The `standalone-new-ui` branch carries the premium interface; backend schemas and feature behavior stay compatible with production.
+- The `shashank-new-ui` branch carries the premium interface; backend schemas and feature behavior stay compatible with production.
 - Keep camera, microphone, and location use explicit and permission-based.
 - Maintain light and dark modes, reduced-motion support, readable contrast, and at least 44-point touch targets.
 

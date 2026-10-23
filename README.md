@@ -15,8 +15,8 @@ Visitors do not need Expo Go, a development server, or a connection to the devel
 | Branch | Purpose |
 | --- | --- |
 | `main` | Current premium-interface web release. GitHub pushes trigger the Cloudflare Pages production deployment. |
-| `standalone-new-ui` | Exact recoverable counterpart of `main` at the redesign release point. Continue premium web-interface work here, then promote reviewed commits to `main`. |
-| `standalone-old-ui` | Preserved pre-redesign Cloudflare web app. Use only for comparison or rollback; do not deploy it as the current product. |
+| `shashank-new-ui` | Recoverable premium web-interface branch. Continue new-UI work here, then promote reviewed app revisions to `main`. |
+| `shashank-old-ui` | Preserved pre-redesign Cloudflare web app. Use only for comparison or temporary rollback. |
 | `shashank-expo` | Separate native Expo / Expo Go app. It is intentionally not part of this web redesign and must not be replaced with a web branch. |
 | `old-rsa-app` | Historical original/RSA-era implementation. Archive/reference only. |
 
@@ -163,7 +163,7 @@ Do not put private credentials in `EXPO_PUBLIC_*`; those values ship to browsers
 | Root directory | Repository root |
 | Public app | [cubo-app-cac.pages.dev](https://cubo-app-cac.pages.dev/) |
 
-Review web changes on `standalone-new-ui`, then promote the exact reviewed commit to `main` and push. Confirm the production deployment succeeds for that commit. Native-only branches such as `shashank-expo` should be excluded from Pages preview builds.
+Review web changes on `shashank-new-ui`, then promote the exact reviewed app revision to `main` and push. Confirm the production deployment succeeds for that revision. Native-only branches such as `shashank-expo` should be excluded from Pages preview builds.
 
 The build exports the Expo web app, bundles the optional AI worker, and prepares assets, headers, and install metadata. **Do not skip `scripts/prepare-web.cjs`**: it relocates dependency assets so fonts and icons survive Cloudflare's upload exclusions.
 

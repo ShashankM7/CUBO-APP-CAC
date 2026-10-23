@@ -26,4 +26,4 @@ See https://firebase.google.com/docs/projects/api-keys.
 
 Run `node --test tests/repository-hygiene.test.cjs` to check the ignore safeguards.
 This is a regression check, not a complete secret scanner or a live permissions audit.
-Keep these safeguards on `main`/`standalone-new-ui` (web) and `shashank-expo` (native).
+Keep these safeguards on `main`/`shashank-new-ui` (web) and `shashank-expo` (native).

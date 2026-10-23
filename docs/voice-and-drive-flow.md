@@ -1,6 +1,6 @@
 # Web voice and drive flow
 
-- `main` and `standalone-new-ui` share this implementation. `shashank-expo` is intentionally separate.
+- `main` and `shashank-new-ui` share this implementation when the new UI is published. `shashank-expo` is intentionally separate.
 - Map → Start drive requires a route and GPS, then starts directly. It no longer opens LiveDrive's camera-check/calibration flow. Home and Account still expose calibration. The drive camera loads the saved baseline; missing calibration, frames or GPS must never produce a valid attention score. Recalibrate when moving the mount; browser permission prompts are controlled by the browser.
 - Child 2 uses the existing MapLibre/OpenFreeMap renderer, not a blank schematic. It is a non-interactive street-map preview with fictional Raleigh coordinates, simulated movement and attribution. It does not request the viewer's GPS. The renderer is unmounted when the profile loses focus.
 - Voice Assist recognizes brief silence requests (stop, shut up, stop talking, stop reading, be quiet) without a wake phrase. These silence playback without disabling the conversation or confirming a report. Turning voice off still asks for confirmation.

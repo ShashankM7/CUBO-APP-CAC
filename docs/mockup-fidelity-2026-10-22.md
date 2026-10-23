@@ -24,7 +24,7 @@ The local Impeccable launcher failed before loading context (`cache_directory_fa
 
 ## Publishing scope
 
-Only standalone-new-ui and main receive this revision. No Expo, old UI, Firebase rules, schema, or deployment configuration changes are intended.
+Only shashank-new-ui and main receive this revision. No Expo, old UI, Firebase rules, schema, or deployment configuration changes are intended.
 
 ## Verification and finish review
 

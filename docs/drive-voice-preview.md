@@ -1,6 +1,6 @@
 # Drive voice interface preview
 
-Historical scope: the web standalone line. This behavior is now present in `main`, `standalone-new-ui`, and the preserved `standalone-old-ui` snapshot.
+Historical scope: the web standalone line. This behavior is now present in `main`, `shashank-new-ui`, and the preserved `shashank-old-ui` snapshot.
 
 ## Direction contract
 

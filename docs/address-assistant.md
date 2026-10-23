@@ -1,6 +1,6 @@
 # Address search and Assistant destinations
 
-Shared address search (`main` and `standalone-new-ui`):
+Shared address search (`main` and `shashank-new-ui`):
 - One debounced hook for Map and saved Home/Work. GPS movement does not restart typing requests.
 - Keep visible results during replacement; abort old queries and ignore late responses.
 - Photon provides typo-tolerant search. Preserve its text relevance and location bias; do not restrict results to a local bounding box or sort solely by distance.

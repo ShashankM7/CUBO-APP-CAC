@@ -20,7 +20,7 @@ Operate-mode visual replacement for CUBO's shared mobile shell, welcome, Home, M
 
 ## Constraints
 
-- UI-only redesign work originates on `standalone-new-ui` and is promoted unchanged to `main` after review.
+- UI-only redesign work originates on `shashank-new-ui` and is promoted unchanged to `main` after review.
 - Preserve every route, control, backend call, and data state.
 - Portrait-first, responsive web and native-compatible React Native.
 - No copied Tesla, Mobbin, Klarna, or Bump branding.
