@@ -416,6 +416,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const reviewBirthDateChange = useCallback(async (request: BirthDateChangeRequest, approved: boolean) => {
     if (!user || accountDetails?.accountType !== 'adult' || request.organizerUid !== user.uid) throw Error('Only an adult family organizer can review the change.');
+    const stalePolicy = approved && request.requestedAccountType === 'adult' ? await getDoc(doc(db, 'familyAppPolicies', request.minorUid)) : null;
     const batch = writeBatch(db);
     batch.update(doc(db, 'birthDateChangeRequests', request.id), { status: approved ? 'approved' : 'denied', updatedAt: serverTimestamp() });
     if (approved) {
@@ -425,6 +426,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         updatedAt: serverTimestamp(),
       });
       batch.update(doc(db, 'connections', request.connectionId), { memberAccountType: request.requestedAccountType, updatedAt: serverTimestamp() });
+      if (stalePolicy?.exists()) batch.delete(stalePolicy.ref);
     }
     await batch.commit();
   }, [accountDetails?.accountType, user?.uid]);

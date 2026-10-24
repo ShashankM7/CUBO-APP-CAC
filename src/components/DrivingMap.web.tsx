@@ -28,7 +28,7 @@ const MapContext = createContext<LibreMap | null>(null);
 const coords = (point: Coordinate): [number, number] => [point.longitude, point.latitude];
 const valid = (p: Coordinate) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 85 && Math.abs(p.longitude) <= 180;
 const streetStyle = (appearance: Props['userInterfaceStyle']) => `https://tiles.openfreemap.org/styles/${appearance === 'dark' ? 'dark' : 'liberty'}`;
-const satelliteTiles = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg';
+const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 function satelliteStyle(appearance: Props['userInterfaceStyle']) {
   return (_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification => {
@@ -39,14 +39,15 @@ function satelliteStyle(appearance: Props['userInterfaceStyle']) {
       type: 'raster',
       source: 'cubo-satellite',
       paint: {
-        'raster-opacity': appearance === 'dark' ? .82 : .94,
-        'raster-saturation': -.08,
-        'raster-contrast': .08,
+        'raster-opacity': appearance === 'dark' ? .86 : .97,
+        'raster-saturation': -.06,
+        'raster-contrast': .06,
+        'raster-resampling': 'linear',
       },
     });
     return {
       ...next,
-      sources: { ...next.sources, 'cubo-satellite': { type: 'raster', tiles: [satelliteTiles], tileSize: 256 } },
+      sources: { ...next.sources, 'cubo-satellite': { type: 'raster', tiles: [satelliteTiles], tileSize: 256, maxzoom: 19 } },
       layers,
     };
   };
@@ -133,7 +134,7 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
     <style>{`.${scope} canvas{outline:none}`}</style>
     <div ref={host} className={scope} aria-label={props.interactive === false ? 'Trip route map' : 'Driving map'} style={{ position: 'absolute', inset: 0 }} />
     {props.mapStyle === 'satellite'
-      ? <a aria-label="Map and satellite data attribution" href="https://cloudless.eox.at/" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.56)' : 'rgba(22,40,32,.56)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM · Satellite © EOX / Copernicus 2025</a>
+      ? <a aria-label="Map and satellite data attribution" href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.56)' : 'rgba(22,40,32,.56)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM · Imagery © Esri, Vantor, Earthstar, GIS Community</a>
       : <a aria-label="Map data attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.56)' : 'rgba(22,40,32,.56)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM</a>}
     <MapContext.Provider value={map}>{props.children}{props.showsUserLocation && props.userLocation && <Marker coordinate={props.userLocation}><div aria-label="Your location" style={{ width: 16, height: 16, borderRadius: 20, background: '#2985E8', border: '3px solid white', boxShadow: '0 0 0 8px #2985e826' }} /></Marker>}</MapContext.Provider>
     {error && <div role="status" style={{ position: 'absolute', top: '42%', left: 12, right: 64, padding: 12, borderRadius: 12, background: '#FFFFFF', color: '#162820', font: '12px sans-serif' }}>{error}<button style={{ minHeight: 44, marginLeft: 8 }} onClick={() => setAttempt(n => n + 1)}>Retry map</button></div>}

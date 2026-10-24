@@ -28,6 +28,10 @@ export function makeBlockingPolicy(targetUid: string, targetName: string, curren
   };
 }
 
+export function policyForAccountType(policy: AppBlockingPolicy, accountType?: 'minor' | 'adult'): AppBlockingPolicy {
+  return accountType === 'adult' && policy.lockedByParent ? { ...policy, lockedByParent: false } : policy;
+}
+
 export function blockingSummary(policy: AppBlockingPolicy | undefined) {
   if (!policy?.enabled) return [];
   const selected = new Set(cleanSelectedIds(policy.selectedIds));

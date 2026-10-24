@@ -13,12 +13,25 @@ function loadPolicy() {
 }
 
 test('blocking policies remove unknown and duplicate app identifiers', () => {
-  const { cleanSelectedIds, makeBlockingPolicy, blockingSummary } = loadPolicy();
+  const { cleanSelectedIds, makeBlockingPolicy, policyForAccountType, blockingSummary } = loadPolicy();
   assert.deepEqual(cleanSelectedIds(['instagram', 'instagram', 'unknown', 1]), ['instagram']);
   const policy = makeBlockingPolicy('child-1', ' Child 1 ', { enabled: true, selectedIds: ['tiktok', 'unknown'] });
   assert.equal(policy.targetName, 'Child 1');
   assert.deepEqual(blockingSummary(policy).map(app => app.id), ['tiktok']);
   assert.deepEqual(blockingSummary({ ...policy, enabled: false }), []);
+  assert.equal(policyForAccountType({ ...policy, lockedByParent: true }, 'adult').lockedByParent, false);
+  assert.equal(policyForAccountType({ ...policy, lockedByParent: true }, 'minor').lockedByParent, true);
+});
+
+test('adult accounts cannot retain a stale family Child Lock', () => {
+  const provider = fs.readFileSync('src/features/appBlocking/AppBlockingContext.tsx', 'utf8');
+  const connections = fs.readFileSync('src/features/connections/ConnectionContext.tsx', 'utf8');
+  const rules = fs.readFileSync('firestore.rules', 'utf8');
+  assert.match(provider, /policyForAccountType\(assigned, 'adult'\)/);
+  assert.match(provider, /deleteDoc\(doc\(db, 'familyAppPolicies', user\.uid\)\)/);
+  assert.match(provider, /accountDetails\?\.accountType === 'adult' \? undefined : familyPolicies\[user\.uid\]/);
+  assert.match(connections, /request\.requestedAccountType === 'adult'[\s\S]*familyAppPolicies[\s\S]*stalePolicy\?\.exists\(\)/);
+  assert.match(rules, /isAdultAccount\(request\.auth\.uid\)/);
 });
 
 test('Account placement, family controls and drive lifecycle remain wired', () => {

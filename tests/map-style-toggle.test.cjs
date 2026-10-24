@@ -12,7 +12,8 @@ test('web driving map offers an accessible street and satellite toggle', () => {
   assert.match(screen, /accessibilityRole="switch"/);
   assert.match(screen, /accessibilityLabel="Satellite view"/);
   assert.match(screen, /mapStyle=\{mapStyle\}/);
-  assert.match(map, /s2cloudless-2025_3857/);
-  assert.match(map, /Satellite © EOX \/ Copernicus 2025/);
+  assert.match(map, /server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery/);
+  assert.match(map, /Imagery © Esri, Vantor, Earthstar, GIS Community/);
+  assert.doesNotMatch(map, /s2cloudless-2025_3857/);
   assert.match(map, /transportation/);
 });
