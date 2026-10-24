@@ -12,6 +12,8 @@ test('Home uses the approved full-width cockpit with live account score and acti
   assert.match(cockpit, /p\.measured \? 'Average safety score' : 'Starter safety score'/);
   assert.match(home, /Where are you going\?/);
   assert.match(home, /Location', status: 'On demand'/);
+  assert.match(home, /requestMediaAccess\('location', request\.signal\)/);
+  assert.doesNotMatch(home, /title: 'Location'[\s\S]{0,180}navigate\('Account'\)/);
   assert.match(home, /blockingPolicy.enabled \? 'Configured' : 'Optional'/);
   assert.ok(home.indexOf('style={s.saved}') < home.indexOf('Ask Cubo Assistant'));
   assert.match(home, />Your Garage<\/Text>/);
@@ -25,7 +27,26 @@ test('Home uses the approved full-width cockpit with live account score and acti
   assert.match(cockpit, /carouselRef\.current\?\.scrollTo/);
   assert.doesNotMatch(cockpit, /pointerEvents="none" style=\{s\.pageDots\}/);
   assert.match(cockpit, /Potential premium savings/);
+  assert.match(cockpit, /purpleOpacity/);
+  assert.match(cockpit, /#A98DBB/);
+  assert.match(home, /const vehiclePages = \[\.\.\.vehicles, null\]/);
+  assert.match(home, /Animated\.ScrollView[\s\S]*setPrimary\(vehicle\.id\)/);
+  assert.match(home, /accessibilityLabel="Add another vehicle"/);
+  assert.match(home, /style=\{s\.vehicleDots\}/);
+  assert.match(home, /connections\.connections\.map/);
+  assert.match(home, /contentContainerStyle=\{s\.peopleScroller\}/);
   assert.doesNotMatch(home, /apps blocked|Location On/);
+});
+
+test('Cubo Assistant uses a friendly animated character and distinct chat bubbles', () => {
+  const assistant = read('src/screens/CuboAIScreen.web.tsx');
+  assert.match(assistant, /assets\/assistant\/cubo-droid\.png/);
+  assert.match(assistant, /className="ai-droid-shell"/);
+  assert.match(assistant, /--ai-user-bubble/);
+  assert.match(assistant, /--ai-assistant-bubble/);
+  assert.match(assistant, /@keyframes ai-float/);
+  assert.match(assistant, /@keyframes ai-message-in/);
+  assert.match(assistant, /prefers-reduced-motion:reduce/);
 });
 
 test('idle map has one destination sheet, saved places and no unhelpful back-home card', () => {
