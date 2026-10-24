@@ -30,13 +30,22 @@ const valid = (p: Coordinate) => Number.isFinite(p.latitude) && Number.isFinite(
 const streetStyle = (appearance: Props['userInterfaceStyle']) => `https://tiles.openfreemap.org/styles/${appearance === 'dark' ? 'dark' : 'liberty'}`;
 const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
-function satelliteStyle(appearance: Props['userInterfaceStyle']) {
+function satelliteStyle() {
   return (_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification => {
     const layers = [...next.layers];
     const roadIndex = layers.findIndex(layer => 'source-layer' in layer && layer['source-layer'] === 'transportation');
     layers.splice(roadIndex < 0 ? Math.max(1, layers.length - 1) : roadIndex, 0, {
-      id: 'cubo-satellite', type: 'raster', source: 'cubo-satellite',
-      paint: { 'raster-opacity': appearance === 'dark' ? .86 : .97, 'raster-saturation': -.06, 'raster-contrast': .06, 'raster-resampling': 'linear' },
+      id: 'cubo-satellite',
+      type: 'raster',
+      source: 'cubo-satellite',
+      paint: {
+        // Satellite imagery is photographic source material, not part of the
+        // app palette. Keep it identical in light and dark appearance modes.
+        'raster-opacity': 1,
+        'raster-saturation': 0,
+        'raster-contrast': 0,
+        'raster-resampling': 'linear',
+      },
     });
     return {
       ...next,
@@ -47,7 +56,8 @@ function satelliteStyle(appearance: Props['userInterfaceStyle']) {
 }
 
 function applyMapStyle(map: LibreMap, mapStyle: MapStyleMode, appearance: Props['userInterfaceStyle']) {
-  map.setStyle(streetStyle(appearance), mapStyle === 'satellite' ? { diff: false, transformStyle: satelliteStyle(appearance) } : { diff: false });
+  const baseStyle = mapStyle === 'satellite' ? streetStyle('light') : streetStyle(appearance);
+  map.setStyle(baseStyle, mapStyle === 'satellite' ? { diff: false, transformStyle: satelliteStyle() } : { diff: false });
 }
 
 export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {

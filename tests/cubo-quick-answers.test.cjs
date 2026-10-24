@@ -32,7 +32,7 @@ const corpus = [
   ['what apps are blocked', /Instagram, Facebook, Telegram/], ['what is Child Lock', /family organizer/],
   ['can I block Facebook and Telegram', /Facebook and Telegram are available/], ['turn off blocked apps', /returns automatically/],
   ['does blocked apps actually block my phone apps', /not active yet/], ['how do I invite someone to CUBO', /Account > Support > Invite someone/],
-  ['what road do I turn onto next', /will not guess/], ['what is my eta', /no live route/], ['how do I switch map source', /Cloudflare/],
+  ['what road do I turn onto next', /will not guess/], ['what is my eta', /no live route/], ['how do I switch map source', /Satellite switch/],
   ['what is my speed in mph', /speedometer/], ['report debris here', /not submitted/], ['is my microphone on', /not always listening/],
   ['why does the model crash', /can still crash Safari/], ['change dark mode', /Account/], ['can I connect bluetooth devices', /disabled/],
   ['what can you do', /Quick answers/], ['my car accident', /emergency/], ['what are my secret details', /not connected/],

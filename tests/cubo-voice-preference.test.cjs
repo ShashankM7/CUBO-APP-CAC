@@ -45,9 +45,10 @@ test('Listen chooses preferred voice each time and falls back if unavailable', (
     voice.dispose(); assert.throws(() => voice.speak('Hello'), /unavailable/);
   } finally { global.window = oldWindow; global.SpeechSynthesisUtterance = oldUtterance; }
 });
-test('voice dropdown follows map source and listens for delayed browser voices', () => {
+test('voice dropdown follows media access and listens for delayed browser voices', () => {
   const profile = fs.readFileSync('src/screens/ProfileScreen.tsx', 'utf8');
-  assert.match(profile, /<MapSourcePreference \/>\s*<MediaAccessPreference \/>\s*<VoicePreference \/>/);
+  assert.match(profile, /<MediaAccessPreference \/>\s*<VoicePreference \/>/);
+  assert.doesNotMatch(profile, /MapSourcePreference/);
   const component = fs.readFileSync('src/components/VoicePreference.web.tsx', 'utf8');
   assert.match(component, /addEventListener\('voiceschanged', refresh\)/);
   assert.match(component, /removeEventListener\('voiceschanged', refresh\)/);
