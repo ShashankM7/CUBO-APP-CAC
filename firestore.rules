@@ -13,6 +13,7 @@ service cloud.firestore {
     //   theme: string, required, either "light" or "dark"
     //   createdAt: timestamp, required, immutable, server time on create
     //   updatedAt: timestamp, required, server time on every write
+    //   deletionRequestedAt: timestamp, optional, short-lived owner deletion marker
     // The document contains private PII and is readable only by its owner.
     //
     // Collection: connectionCodes — short-lived exact-match invite code owned
@@ -59,7 +60,7 @@ service cloud.firestore {
     }
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'name', 'email', 'theme', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'name', 'email', 'theme', 'avatarId', 'createdAt', 'updatedAt', 'accountDetails'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'theme', 'avatarId', 'createdAt', 'updatedAt', 'accountDetails', 'deletionRequestedAt'])
         && data.uid is string && data.uid.size() >= 20 && data.uid.size() <= 128
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
         && isValidEmail(data.email)
@@ -67,6 +68,7 @@ service cloud.firestore {
         && (!('avatarId' in data) || isValidAvatarId(data.avatarId))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
+        && (!('deletionRequestedAt' in data) || data.deletionRequestedAt is timestamp)
         && (!('accountDetails' in data) || validAccountDetails(data.accountDetails));
     }
     function isValidSyncDocument(domain, data) {
@@ -84,6 +86,14 @@ service cloud.firestore {
         && data.updatedAt is timestamp && data.updatedAt == request.time;
     }
     function userDoc(userId) { return get(/databases/$(database)/documents/users/$(userId)).data; }
+    function accountDeletionRequested(userId) {
+      return isAuthenticated() && request.auth.uid == userId
+        && exists(/databases/$(database)/documents/users/$(userId))
+        && 'deletionRequestedAt' in userDoc(userId)
+        && userDoc(userId).deletionRequestedAt is timestamp
+        && userDoc(userId).deletionRequestedAt > request.time - duration.value(15, 'm')
+        && userDoc(userId).deletionRequestedAt <= request.time;
+    }
     function isAdultAccount(userId) { return userDoc(userId).accountDetails.accountType == 'adult'; }
     function familyMembership(userId) { return get(/databases/$(database)/documents/familyMemberships/$(userId)).data; }
     // Firestore Rules cannot safely use JavaScript-style lexical ordering for
@@ -252,6 +262,8 @@ service cloud.firestore {
           && (request.resource.data.email == resource.data.email || request.auth.token.email_verified == true)
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletionRequestedAt'])
+            || request.resource.data.deletionRequestedAt == request.time)
           && (!exists(/databases/$(database)/documents/familyMemberships/$(userId))
             || request.resource.data.accountDetails.birthDate == resource.data.accountDetails.birthDate
               && request.resource.data.accountDetails.accountType == resource.data.accountDetails.accountType))
@@ -272,22 +284,23 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/familyMemberships/$(userId)).data.organizerUid == request.auth.uid
           && getAfter(/databases/$(database)/documents/familyMemberships/$(userId)).data.connectionId
             == get(/databases/$(database)/documents/birthDateChangeRequests/$(userId)).data.connectionId);
-      allow delete: if false;
+      allow delete: if isOwner(userId) && accountDeletionRequested(userId);
 
       // Bounded JSON envelopes keep account sync inexpensive and make it
       // impossible for one signed-in account to read or overwrite another.
       match /sync/{domain} {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidSyncDocument(domain, request.resource.data);
-        allow delete: if false;
+        allow delete: if isOwner(userId) && accountDeletionRequested(userId);
       }
     }
 
-    // Short-lived exact-match codes. Listing is always denied, and knowing a
-    // code never grants access: the organizer still has to approve a request.
+    // Short-lived exact-match codes. Only an owner-filtered cleanup query may
+    // list codes; knowing a code never grants access because the organizer
+    // still has to approve a request.
     match /connectionCodes/{codeId} {
       allow get: if isAuthenticated();
-      allow list: if false;
+      allow list: if isAuthenticated() && resource.data.ownerUid == request.auth.uid;
       allow create: if isAuthenticated()
         && validConnectionCode(codeId, request.resource.data)
         && request.resource.data.ownerUid == request.auth.uid
@@ -349,7 +362,9 @@ service cloud.firestore {
         && ((resource.data.ownerUid == request.auth.uid && resource.data.status == 'pending')
           || (resource.data.status == 'approved'
             && (resource.data.ownerUid == request.auth.uid || resource.data.requesterUid == request.auth.uid)
-            && !existsAfter(/databases/$(database)/documents/connections/$(requestId))));
+            && !existsAfter(/databases/$(database)/documents/connections/$(requestId)))
+          || ((resource.data.ownerUid == request.auth.uid || resource.data.requesterUid == request.auth.uid)
+            && accountDeletionRequested(request.auth.uid)));
     }
 
     match /familyMemberships/{minorId} {
@@ -362,7 +377,8 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/connections/$(request.resource.data.connectionId)).data.memberUid == request.resource.data.minorUid;
       allow update: if false;
       allow delete: if isAuthenticated() && (resource.data.minorUid == request.auth.uid || resource.data.organizerUid == request.auth.uid)
-        && !existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId));
+        && (!existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))
+          || accountDeletionRequested(request.auth.uid));
     }
 
     match /birthDateChangeRequests/{minorId} {
@@ -402,7 +418,9 @@ service cloud.firestore {
                 && getAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId)).data.memberAccountType == resource.data.requestedAccountType))));
       allow delete: if isAuthenticated() && (request.auth.uid == minorId
         || (resource.data.organizerUid == request.auth.uid
-          && !existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))));
+          && !existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId)))
+          || ((resource.data.organizerUid == request.auth.uid || resource.data.minorUid == request.auth.uid)
+            && accountDeletionRequested(request.auth.uid)));
     }
 
     // A request never grants location access. The linked minor must explicitly
@@ -434,7 +452,8 @@ service cloud.firestore {
             && resource.data.status == 'pending' && request.resource.data.status in ['approved', 'denied']));
       allow delete: if isAuthenticated()
         && (resource.data.organizerUid == request.auth.uid || resource.data.minorUid == request.auth.uid)
-        && !existsAfter(/databases/$(database)/documents/connections/$(connectionId));
+        && (!existsAfter(/databases/$(database)/documents/connections/$(connectionId))
+          || accountDeletionRequested(request.auth.uid));
     }
 
     // Parent-selected Blocked Apps synchronize to the linked minor. Child Lock
@@ -467,7 +486,9 @@ service cloud.firestore {
         && (resource.data.organizerUid == request.auth.uid
           || (resource.data.minorUid == request.auth.uid
             && (!existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))
-              || isAdultAccount(request.auth.uid))));
+              || isAdultAccount(request.auth.uid)))
+          || ((resource.data.organizerUid == request.auth.uid || resource.data.minorUid == request.auth.uid)
+            && accountDeletionRequested(request.auth.uid));
     }
 
     match /connections/{connectionId} {
@@ -527,7 +548,19 @@ service cloud.firestore {
           || (resource.data.memberUid == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberName', 'memberAvatarId', 'updatedAt'])
             && request.resource.data.memberName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
-            && request.resource.data.memberAvatarId == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.avatarId));
+            && request.resource.data.memberAvatarId == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.avatarId)
+          || (resource.data.ownerUid == request.auth.uid && accountDeletionRequested(request.auth.uid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerName', 'ownerShareScore', 'ownerShareLocation', 'ownerScore', 'ownerScoreMeasured', 'ownerLatitude', 'ownerLongitude', 'ownerLocationAt', 'updatedAt'])
+            && request.resource.data.ownerName == 'Account Terminated'
+            && request.resource.data.ownerShareScore == false && request.resource.data.ownerShareLocation == false
+            && request.resource.data.ownerScore == null && request.resource.data.ownerScoreMeasured == false
+            && request.resource.data.ownerLatitude == null && request.resource.data.ownerLongitude == null && request.resource.data.ownerLocationAt == null)
+          || (resource.data.memberUid == request.auth.uid && accountDeletionRequested(request.auth.uid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberName', 'memberShareScore', 'memberShareLocation', 'memberScore', 'memberScoreMeasured', 'memberLatitude', 'memberLongitude', 'memberLocationAt', 'updatedAt'])
+            && request.resource.data.memberName == 'Account Terminated'
+            && request.resource.data.memberShareScore == false && request.resource.data.memberShareLocation == false
+            && request.resource.data.memberScore == null && request.resource.data.memberScoreMeasured == false
+            && request.resource.data.memberLatitude == null && request.resource.data.memberLongitude == null && request.resource.data.memberLocationAt == null));
       allow delete: if isAuthenticated() && (resource.data.ownerUid == request.auth.uid || resource.data.memberUid == request.auth.uid)
         && (resource.data.kind != 'family'
           || !existsAfter(/databases/$(database)/documents/familyMemberships/$(resource.data.memberUid)));
@@ -552,10 +585,11 @@ service cloud.firestore {
         && validRoadConfirmation(getAfter(/databases/$(database)/documents/roadReports/$(reportId)/confirmations/$(request.auth.uid)).data)
         && getAfter(/databases/$(database)/documents/roadReports/$(reportId)/confirmations/$(request.auth.uid)).data.voterId == request.auth.uid
         && getAfter(/databases/$(database)/documents/roadReports/$(reportId)/confirmations/$(request.auth.uid)).data.updatedAt == request.time;
-      allow delete: if false;
+      allow delete: if isAuthenticated() && resource.data.reporterId == request.auth.uid
+        && accountDeletionRequested(request.auth.uid);
 
       match /confirmations/{voterId} {
-        allow read: if isAuthenticated() && voterId == request.auth.uid;
+        allow read: if isAuthenticated() && resource.data.voterId == request.auth.uid;
         allow create: if isAuthenticated() && voterId == request.auth.uid
           && exists(/databases/$(database)/documents/roadReports/$(reportId))
           && get(/databases/$(database)/documents/roadReports/$(reportId)).data.reporterId != request.auth.uid
@@ -566,7 +600,10 @@ service cloud.firestore {
           && validRoadReport(getAfter(/databases/$(database)/documents/roadReports/$(reportId)).data)
           && getAfter(/databases/$(database)/documents/roadReports/$(reportId)).data.confirmationCount
             == get(/databases/$(database)/documents/roadReports/$(reportId)).data.confirmationCount + 1;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isAuthenticated() && voterId == request.auth.uid
+          && resource.data.voterId == request.auth.uid
+          && accountDeletionRequested(request.auth.uid);
       }
     }
 

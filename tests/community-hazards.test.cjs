@@ -13,7 +13,7 @@ test('community hazards are authenticated, anonymous to the UI, bounded and atom
   assert.match(rules, /createdAt \+ duration\.value\(30, 'm'\) > request\.time/);
   assert.match(rules, /affectedKeys\(\)\.hasOnly\(\['confirmationCount', 'active'\]\)/);
   assert.match(rules, /getAfter\(\/databases\/\$\(database\)\/documents\/roadReports\/\$\(reportId\)\/confirmations\/\$\(request\.auth\.uid\)\)/);
-  assert.match(rules, /allow delete: if false/);
+  assert.match(rules, /allow delete: if isAuthenticated\(\) && resource\.data\.reporterId == request\.auth\.uid\s*&& accountDeletionRequested\(request\.auth\.uid\)/);
 });
 
 test('community hazard query has its required nearby-cell index', () => {
@@ -24,6 +24,11 @@ test('community hazard query has its required nearby-cell index', () => {
     { fieldPath: 'cell', order: 'ASCENDING' },
     { fieldPath: 'createdAt', order: 'DESCENDING' },
   ]);
+  assert.deepEqual(indexes.fieldOverrides, [{
+    collectionGroup: 'confirmations',
+    fieldPath: 'voterId',
+    indexes: [{ order: 'ASCENDING', queryScope: 'COLLECTION_GROUP' }],
+  }]);
   const client = read('src/features/drives/useRoadReports.ts');
   assert.match(client, /where\('cell', 'in', cells\)/);
   assert.match(client, /where\('createdAt', '>', Timestamp\.fromMillis\(cutoff\)\)/);

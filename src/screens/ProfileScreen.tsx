@@ -10,6 +10,7 @@ import { AppInviteSheet } from '../components/AppInviteSheet';
 import { MediaAccessPreference } from '../components/MediaAccessPreference';
 import { VoicePreference } from '../components/VoicePreference';
 import { ProfileAvatar } from '../components/ProfileAvatar';
+import { DeleteAccountSheet } from '../components/DeleteAccountSheet';
 import type { RootStackParamList } from '../navigation/types';
 import { useAppearance } from '../theme/AppearanceContext';
 import type { AppColors } from '../theme/colors';
@@ -24,6 +25,7 @@ export function ProfileScreen() {
   const { colors, preference, setMode } = useAppearance();
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [notifications, setNotifications] = useState(true);
   const [tripReports, setTripReports] = useState(true);
@@ -73,8 +75,13 @@ export function ProfileScreen() {
       <SettingsRow icon="help-circle-outline" title="Help & Feedback" onPress={() => navigation.navigate('SettingsDetail', { kind: 'help' })} colors={colors} styles={styles} />
       <SettingsRow icon="information-circle-outline" title="About CUBO" detail="Our mission and team" onPress={() => navigation.navigate('SettingsDetail', { kind: 'about' })} colors={colors} styles={styles} last />
     </View>
-    <Pressable onPress={() => void signOut()} style={styles.signOut}><Ionicons name="log-out-outline" size={18} color={colors.danger} /><View style={styles.fill}><Text style={styles.signOutText}>Log Out</Text><Text style={styles.rowDetail}>{user?.email}</Text></View></Pressable>
+    <View style={styles.dangerGroup}>
+      <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.dangerRow}><Ionicons name="log-out-outline" size={18} color={colors.danger} /><View style={styles.fill}><Text style={styles.dangerText}>Log Out</Text><Text style={styles.rowDetail}>{user?.email}</Text></View></Pressable>
+      <View style={styles.dangerDivider} />
+      <Pressable accessibilityRole="button" onPress={() => setDeleteOpen(true)} style={styles.dangerRow}><Ionicons name="trash-outline" size={18} color={colors.danger} /><View style={styles.fill}><Text style={styles.dangerText}>Delete Account</Text><Text style={styles.rowDetail}>Permanently remove your account and synced data</Text></View><Ionicons name="chevron-forward" size={17} color={colors.danger} /></Pressable>
+    </View>
     {inviteOpen ? <AppInviteSheet name={profile.name} onClose={() => setInviteOpen(false)} /> : null}
+    <DeleteAccountSheet visible={deleteOpen} onClose={() => setDeleteOpen(false)} />
     </View>
   </ScreenShell>;
 }
@@ -92,5 +99,7 @@ const makeStyles = (colors: AppColors) => StyleSheet.create({
   identity: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: spacing.lg, borderRadius: 20, backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   avatar: { width: 52, height: 52, borderRadius: 18, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: '100%', height: '100%' }, avatarText: { color: colors.accent, fontWeight: '800' }, fill: { flex: 1 }, name: { color: colors.text, fontSize: 16, fontFamily: 'Manrope_700Bold', fontWeight: '700' }, meta: { color: colors.textSecondary, fontSize: 11, marginTop: 4 }, action: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   section: { color: colors.text, fontSize: 15, fontFamily: 'Manrope_700Bold', marginTop: spacing.lg, marginBottom: 4 },
-  group: { borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' }, row: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingVertical: 10 }, lastRow: { borderBottomWidth: 0 }, rowTitle: { color: colors.text, fontSize: 14, fontWeight: '600' }, rowDetail: { color: colors.textSecondary, fontSize: 10, marginTop: 3 }, signOut: { minHeight: 58, marginTop: spacing.lg, marginBottom: spacing.md, paddingHorizontal: 14, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.dangerSoft, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center', gap: 12 }, signOutText: { color: colors.danger, fontFamily: 'Manrope_700Bold', fontSize: 13 },
+  group: { borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' }, row: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingVertical: 10 }, lastRow: { borderBottomWidth: 0 }, rowTitle: { color: colors.text, fontSize: 14, fontWeight: '600' }, rowDetail: { color: colors.textSecondary, fontSize: 10, marginTop: 3 },
+  dangerGroup: { marginTop: spacing.lg, marginBottom: spacing.md, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.card, overflow: 'hidden' },
+  dangerRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }, dangerDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.dangerSoft }, dangerText: { color: colors.danger, fontFamily: 'Manrope_700Bold', fontSize: 13 },
 });

@@ -157,10 +157,10 @@ test('family and friend pairs use separate stable IDs and duplicates collapse', 
   assert.deepEqual(dedupeConnections([old, latest]).map(item => item.id), ['random-two']);
 });
 
-test('Firestore rules deny code listing and bind approval to one connection without comparing UID strings', () => {
+test('Firestore rules scope code listing to its owner and bind approval to one connection without comparing UID strings', () => {
   const rules = fs.readFileSync('firestore.rules', 'utf8');
   assert.match(rules, /match \/connectionCodes\/\{codeId\}/);
-  assert.match(rules, /allow list: if false/);
+  assert.match(rules, /allow list: if isAuthenticated\(\) && resource\.data\.ownerUid == request\.auth\.uid/);
   assert.match(rules, /accountDetails\.accountType == 'adult'/);
   assert.match(rules, /isConnectionPairId\(documentId, kind, firstUid, secondUid\)/);
   assert.match(rules, /connectionId == request\.resource\.data\.requestId/);

@@ -11,6 +11,7 @@ import { syncIdentity } from './syncIdentity';
 import { startGoogleSignIn } from './googleSignIn';
 import { googleAccountNeedsSetup } from './googleAccountSetup';
 import { linkCurrentUserWithGoogle } from './linkGoogleAccount';
+import { deleteCurrentAccount } from './accountDeletion';
 
 type AuthContextValue = {
   user: User | null;
@@ -27,6 +28,7 @@ type AuthContextValue = {
   linkGoogleAccount: () => Promise<void>;
   signUp: (name: string, email: string, password: string, details: AccountDetails) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  deleteAccount: (birthDate: string) => Promise<void>;
   signOut: () => Promise<void>;
   useDifferentAccount: () => Promise<void>;
   signedOutDestination: 'welcome' | 'signup';
@@ -164,6 +166,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     await sendPasswordResetEmail(auth, email.trim().toLowerCase());
   }, []);
+  const deleteAccount = useCallback(async (birthDate: string) => {
+    const current = auth.currentUser;
+    if (!current) throw Error('Sign in before deleting your account.');
+    setSignedOutDestination('welcome');
+    await deleteCurrentAccount(current, birthDate);
+    setAccountDetails(null);
+    setNeedsAccountSetup(false);
+  }, []);
   const signOut = useCallback(async () => {
     setSignedOutDestination('welcome');
     await firebaseSignOut(auth);
@@ -206,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await updatePassword(current, password);
   }, []);
   const clearAuthNotice = useCallback(() => setAuthNotice(''), []);
-  const value = useMemo(() => ({ user, loading: loading || provisioning, needsAccountSetup, accountDetails, completeGoogleAccountSetup, saveAccountDetails, changeEmail, changePassword, signIn, signInWithGoogle, googleLinked, linkGoogleAccount, signUp, resetPassword, signOut, useDifferentAccount, signedOutDestination, showWelcome, authNotice, clearAuthNotice }), [loading, provisioning, needsAccountSetup, accountDetails, completeGoogleAccountSetup, saveAccountDetails, changeEmail, changePassword, resetPassword, signIn, signInWithGoogle, googleLinked, linkGoogleAccount, providerRevision, signOut, useDifferentAccount, signedOutDestination, showWelcome, signUp, user, authNotice, clearAuthNotice]);
+  const value = useMemo(() => ({ user, loading: loading || provisioning, needsAccountSetup, accountDetails, completeGoogleAccountSetup, saveAccountDetails, changeEmail, changePassword, signIn, signInWithGoogle, googleLinked, linkGoogleAccount, signUp, resetPassword, deleteAccount, signOut, useDifferentAccount, signedOutDestination, showWelcome, authNotice, clearAuthNotice }), [loading, provisioning, needsAccountSetup, accountDetails, completeGoogleAccountSetup, saveAccountDetails, changeEmail, changePassword, resetPassword, deleteAccount, signIn, signInWithGoogle, googleLinked, linkGoogleAccount, providerRevision, signOut, useDifferentAccount, signedOutDestination, showWelcome, signUp, user, authNotice, clearAuthNotice]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
