@@ -110,9 +110,11 @@ test('five primary tabs preserve access to the vehicle garage', () => {
   assert.match(reveal, /return \(\) => animation.stop\(\)/);
 });
 
-test('welcome photo fills its viewport instead of retaining intrinsic asset dimensions', () => {
+test('welcome vehicle stays contained on its branded stage', () => {
   const welcome = read('src/screens/WelcomeScreen.tsx');
-  assert.match(welcome, /resizeMode="cover" style=\{\[StyleSheet.absoluteFill, \{ width: '100%', height: '100%' \}\]\}/);
+  assert.match(welcome, /compact-car-green\.png/);
+  assert.match(welcome, /resizeMode="contain" style=\{s\.vehicle\}/);
+  assert.match(welcome, /CircuitField/);
 });
 
 test('web map uses a bounded normalized drawing buffer at fractional browser zoom', () => {

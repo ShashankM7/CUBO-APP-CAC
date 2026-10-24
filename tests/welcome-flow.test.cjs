@@ -35,16 +35,17 @@ test('shared welcome flow replaces instant screen swap and supports reduced moti
   assert.match(flow, /const startInAuth = !!initialMode/);
 });
 
-test('approved cinematic welcome has real direct sign-in and signup controls', () => {
+test('brand-led welcome has real direct sign-in and signup controls', () => {
   const screen = read('src/screens/WelcomeScreen.tsx');
   const flow = read('src/screens/WelcomeFlow.tsx');
-  assert.match(screen, /Personal Drive Assistant/);
+  assert.match(screen, /PERSONAL DRIVE ASSISTANT/);
   assert.match(screen, /style=\{s.wordmark\}>CUBO<\/Text>/);
   assert.match(screen, /onChooseMode\('login'\)/);
   assert.match(screen, /onChooseMode\('signup'\)/);
   assert.match(flow, /setAuthMode\(mode\); navigate\(true\)/);
   assert.match(flow, /AuthScreen initialMode=\{authMode\}/);
-  assert.match(screen, /assets\/welcome\/cubo-dusk.webp/);
-  assert.ok(fs.statSync(path.join(root, 'assets/welcome/cubo-dusk.webp')).size < 100000);
-  assert.doesNotMatch(screen, /WelcomeCarousel|Get started|Stay with the road/);
+  assert.match(screen, /assets\/vehicles\/compact-car-green.png/);
+  assert.ok(fs.statSync(path.join(root, 'assets/vehicles/compact-car-green.png')).size < 2000000);
+  assert.match(screen, /Drive smarter/);
+  assert.doesNotMatch(screen, /WelcomeCarousel|Get started|Stay with the road|cubo-dusk/);
 });
