@@ -1,6 +1,6 @@
 import { createContext, forwardRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Map as LibreMap, Marker as LibreMarker, LngLatBounds, type GeoJSONSource } from 'maplibre-gl';
+import { Map as LibreMap, Marker as LibreMarker, LngLatBounds, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { applyWebDarkMapPaint } from './webDarkMapPaint';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
@@ -8,6 +8,7 @@ import { nearestBearing } from '../features/navigation/courseHeading';
 
 type Coordinate = { latitude: number; longitude: number };
 export type Region = Coordinate & { latitudeDelta: number; longitudeDelta: number };
+export type MapStyleMode = 'street' | 'satellite';
 type Camera = { center: Coordinate; heading?: number; pitch?: number; zoom?: number; altitude?: number };
 export type MapView = {
   animateCamera: (camera: Camera, options?: { duration?: number }) => void;
@@ -20,11 +21,41 @@ type Props = {
   onPress?: () => void; onPanDrag?: () => void; userLocation?: Coordinate | null; showsUserLocation?: boolean;
   showsMyLocationButton?: boolean; showsCompass?: boolean; toolbarEnabled?: boolean;
   attributionBottom?: number;
+  mapStyle?: MapStyleMode;
   interactive?: boolean; onMapReady?: () => void;
 };
 const MapContext = createContext<LibreMap | null>(null);
 const coords = (point: Coordinate): [number, number] => [point.longitude, point.latitude];
 const valid = (p: Coordinate) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 85 && Math.abs(p.longitude) <= 180;
+const streetStyle = (appearance: Props['userInterfaceStyle']) => `https://tiles.openfreemap.org/styles/${appearance === 'dark' ? 'dark' : 'liberty'}`;
+const satelliteTiles = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg';
+
+function satelliteStyle(appearance: Props['userInterfaceStyle']) {
+  return (_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification => {
+    const layers = [...next.layers];
+    const roadIndex = layers.findIndex(layer => 'source-layer' in layer && layer['source-layer'] === 'transportation');
+    layers.splice(roadIndex < 0 ? Math.max(1, layers.length - 1) : roadIndex, 0, {
+      id: 'cubo-satellite',
+      type: 'raster',
+      source: 'cubo-satellite',
+      paint: {
+        'raster-opacity': appearance === 'dark' ? .82 : .94,
+        'raster-saturation': -.08,
+        'raster-contrast': .08,
+      },
+    });
+    return {
+      ...next,
+      sources: { ...next.sources, 'cubo-satellite': { type: 'raster', tiles: [satelliteTiles], tileSize: 256 } },
+      layers,
+    };
+  };
+}
+
+function applyMapStyle(map: LibreMap, mapStyle: MapStyleMode, appearance: Props['userInterfaceStyle']) {
+  map.setStyle(streetStyle(appearance), mapStyle === 'satellite' ? { diff: false, transformStyle: satelliteStyle(appearance) } : { diff: false });
+}
+
 export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
   const scope = `cubo-map-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const host = useRef<HTMLDivElement>(null);
@@ -33,6 +64,7 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
   const [map, setMap] = useState<LibreMap | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const activeMapStyle = useRef<MapStyleMode>(props.mapStyle ?? 'street');
   const pending = useRef<((map: LibreMap) => void) | null>(null);
   const run = (action: (map: LibreMap) => void) => { if (instance.current) action(instance.current); else pending.current = action; };
   useImperativeHandle(ref, () => ({
@@ -64,12 +96,13 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
       // Normalize fractional browser zoom ratios and cap the map's drawing buffer.
       // This avoids subpixel resize churn and saves GPU memory on 3x phone screens.
       const pixelRatio = Math.max(1, Math.min(2, Math.round(window.devicePixelRatio || 1)));
-      current = new LibreMap({ container: host.current, pixelRatio, style: `https://tiles.openfreemap.org/styles/${props.userInterfaceStyle === 'dark' ? 'dark' : 'liberty'}`, center: coords(props.initialRegion), zoom: 13, attributionControl: false, interactive: props.interactive ?? true });
+      current = new LibreMap({ container: host.current, pixelRatio, center: coords(props.initialRegion), zoom: 13, attributionControl: false, interactive: props.interactive ?? true });
       instance.current = current;
+      applyMapStyle(current, activeMapStyle.current, props.userInterfaceStyle);
       current.on('styleimagemissing', event => {
         if (!current?.hasImage(event.id)) current?.addImage(event.id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
       });
-      current.on('load', () => { if (!live) return; applyWebDarkMapPaint(current!, props.userInterfaceStyle); clearTimeout(timer); setError(''); setMap(current!); callbacks.current.onMapReady?.(); });
+      current.on('load', () => { if (!live) return; if (activeMapStyle.current === 'street') applyWebDarkMapPaint(current!, props.userInterfaceStyle); clearTimeout(timer); setError(''); setMap(current!); callbacks.current.onMapReady?.(); });
       current.on('error', () => { if (live) setError('Some map tiles could not load. Check your connection.'); });
       current.on('click', () => callbacks.current.onPress?.());
       current.on('dragstart', () => callbacks.current.onPanDrag?.());
@@ -79,10 +112,29 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
     } catch { setError('This browser could not start the map. Try an updated Safari or Chrome.'); }
     return () => { live = false; clearTimeout(timer); observer?.disconnect(); instance.current = null; current?.remove(); };
   }, [props.userInterfaceStyle, attempt]);
+  useEffect(() => {
+    const requested = props.mapStyle ?? 'street';
+    if (activeMapStyle.current === requested) return;
+    activeMapStyle.current = requested;
+    const current = instance.current;
+    if (!current) return;
+    let live = true;
+    setMap(null);
+    const ready = () => {
+      if (!live) return;
+      if (requested === 'street') applyWebDarkMapPaint(current, props.userInterfaceStyle);
+      setError(''); setMap(current); callbacks.current.onMapReady?.();
+    };
+    current.once('style.load', ready);
+    applyMapStyle(current, requested, props.userInterfaceStyle);
+    return () => { live = false; current.off('style.load', ready); };
+  }, [props.mapStyle, props.userInterfaceStyle]);
   return <View style={props.style}>
     <style>{`.${scope} canvas{outline:none}`}</style>
     <div ref={host} className={scope} aria-label={props.interactive === false ? 'Trip route map' : 'Driving map'} style={{ position: 'absolute', inset: 0 }} />
-    <a aria-label="Map data attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.48)' : 'rgba(22,40,32,.48)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM</a>
+    {props.mapStyle === 'satellite'
+      ? <a aria-label="Map and satellite data attribution" href="https://cloudless.eox.at/" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.56)' : 'rgba(22,40,32,.56)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM · Satellite © EOX / Copernicus 2025</a>
+      : <a aria-label="Map data attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.56)' : 'rgba(22,40,32,.56)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM</a>}
     <MapContext.Provider value={map}>{props.children}{props.showsUserLocation && props.userLocation && <Marker coordinate={props.userLocation}><div aria-label="Your location" style={{ width: 16, height: 16, borderRadius: 20, background: '#2985E8', border: '3px solid white', boxShadow: '0 0 0 8px #2985e826' }} /></Marker>}</MapContext.Provider>
     {error && <div role="status" style={{ position: 'absolute', top: '42%', left: 12, right: 64, padding: 12, borderRadius: 12, background: '#FFFFFF', color: '#162820', font: '12px sans-serif' }}>{error}<button style={{ minHeight: 44, marginLeft: 8 }} onClick={() => setAttempt(n => n + 1)}>Retry map</button></div>}
   </View>;

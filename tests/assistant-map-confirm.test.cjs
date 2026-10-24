@@ -33,5 +33,5 @@ test('chat exposes explicit switch and stay controls, menu attribution and full 
   assert.match(screen, />Llama license</); assert.doesNotMatch(screen, /className="ai-credit"/);
   const home = fs.readFileSync('src/screens/HomeScreen.tsx', 'utf8');
   assert.match(home, /accessibilityLabel="Ask Cubo Assistant"/);
-  assert.match(home, /pointerEvents="none"/); assert.match(home, /name="pulse-outline"/);
+  assert.match(home, /pointerEvents="none"/); assert.doesNotMatch(home, /name="pulse-outline"/);
 });

@@ -40,6 +40,13 @@ test('Home uses the approved full-width cockpit with live account score and acti
   assert.doesNotMatch(home, /apps blocked|Location On/);
 });
 
+test('Home Assistant card uses the plum treatment without the trailing pulse icon', () => {
+  const home = read('src/screens/HomeScreen.tsx');
+  assert.match(home, /assistantDark: \{ backgroundColor: '#2A2330'/);
+  assert.match(home, /assistantLight: \{ backgroundColor: '#ECE3F0'/);
+  assert.doesNotMatch(home, /name="pulse-outline"/);
+});
+
 test('Cubo Assistant uses a friendly animated character and distinct chat bubbles', () => {
   const assistant = read('src/screens/CuboAIScreen.web.tsx');
   assert.match(assistant, /assets\/assistant\/cubo-droid\.png/);

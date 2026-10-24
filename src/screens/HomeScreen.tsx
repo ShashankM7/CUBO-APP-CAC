@@ -13,6 +13,7 @@ import { readCalibration, type CalibrationRecord } from '../features/calibration
 import { useConnections } from '../features/connections/ConnectionContext';
 import { useDrives } from '../features/drives/DriveContext';
 import { useFamily } from '../features/family/FamilyContext';
+import { readDismissedNotificationIds } from '../features/notifications/notificationDismissals';
 import { accessError } from '../features/permissions/accessErrors';
 import { checkMediaAccess, requestMediaAccess } from '../features/permissions/mediaAccess';
 import { usePlaces } from '../features/places/PlacesContext';
@@ -38,7 +39,9 @@ export function HomeScreen() {
   const connections = useConnections();
   const { user } = useAuth();
   const appBlocking = useAppBlocking();
-  const unreadCount = family.notifications.filter(item => !item.read).length + appBlocking.notices.filter(item => !item.read).length;
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const unreadCount = family.notifications.filter(item => !item.read && !dismissedNotifications.has(`family:${item.id}`)).length
+    + appBlocking.notices.filter(item => !item.read && !dismissedNotifications.has(`blocking:${item.id}`)).length;
   const [calibration, setCalibration] = useState<CalibrationRecord | null>(null);
   const [locationStatus, setLocationStatus] = useState('On demand');
   const [locationMessage, setLocationMessage] = useState('');
@@ -53,13 +56,18 @@ export function HomeScreen() {
     let active = true;
     void readCalibration().then(value => { if (active) setCalibration(value); });
     void checkMediaAccess('location').then(value => { if (active) setLocationStatus(locationLabel(value)); }).catch(() => undefined);
+    if (user?.uid) {
+      void readDismissedNotificationIds(user.uid).then(value => { if (active) setDismissedNotifications(value); });
+    } else {
+      setDismissedNotifications(new Set());
+    }
     return () => {
       active = false;
       locationRequest.current?.abort();
       locationRequest.current = null;
       setLocationBusy(false);
     };
-  }, []));
+  }, [user?.uid]));
 
   const selected = vehicles.find(vehicle => vehicle.primary) ?? vehicles[0];
   const measuredDrives = sessions.filter(item => item.attentionMeasured);
@@ -132,10 +140,9 @@ export function HomeScreen() {
         <View style={s.fill}><Text style={s.label}>{kind === 'home' ? 'Home' : 'Work'}</Text><Text numberOfLines={1} style={s.meta}>{places[kind]?.title ?? 'Set address'}</Text></View>
       </MotionPressable>)}</View>
 
-      <MotionPressable accessibilityLabel="Ask Cubo Assistant" style={s.assistant} onPress={() => navigation.navigate('CuboAI')}>
-        <View pointerEvents="none" style={s.assistantContents}><Ionicons name="sparkles-outline" size={25} color={c.accent} />
-          <View style={s.fill}><Text style={[s.label, s.assistantTitle]}>Ask Cubo Assistant</Text><Text style={s.meta}>Your drive, your questions. Just ask.</Text></View>
-          <Ionicons name="pulse-outline" size={24} color={c.accent} />
+      <MotionPressable accessibilityLabel="Ask Cubo Assistant" style={[s.assistant, mode === 'dark' ? s.assistantDark : s.assistantLight]} onPress={() => navigation.navigate('CuboAI')}>
+        <View pointerEvents="none" style={s.assistantContents}><Ionicons name="sparkles-outline" size={25} color={mode === 'dark' ? '#C8ADD8' : '#765E86'} />
+          <View style={s.fill}><Text style={[s.label, s.assistantTitle, mode === 'dark' ? s.assistantTitleDark : s.assistantTitleLight]}>Ask Cubo Assistant</Text><Text style={[s.meta, mode === 'dark' ? s.assistantMetaDark : s.assistantMetaLight]}>Your drive, your questions. Just ask.</Text></View>
         </View>
       </MotionPressable>
 
@@ -211,9 +218,10 @@ const makeThemeStyles = (c: AppColors) => StyleSheet.create({
   smallIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: c.secondarySurface, alignItems: 'center', justifyContent: 'center' },
   label: { color: c.text, fontFamily: 'Manrope_700Bold', fontSize: 13 },
   meta: { color: c.textSecondary, fontSize: 11, lineHeight: 17, marginTop: 3 },
-  assistant: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, minHeight: 76, borderRadius: 18, backgroundColor: c.accentSoft },
+  assistant: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, minHeight: 76, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
+  assistantDark: { backgroundColor: '#2A2330', borderColor: 'rgba(201,177,216,.22)' }, assistantLight: { backgroundColor: '#ECE3F0', borderColor: '#D7C6DF' },
   assistantContents: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  assistantTitle: { fontSize: 16 },
+  assistantTitle: { fontSize: 16 }, assistantTitleDark: { color: '#F6F0FA' }, assistantTitleLight: { color: '#2E2633' }, assistantMetaDark: { color: '#C7B8D0' }, assistantMetaLight: { color: '#675A6D' },
   readinessRow: { flexDirection: 'row', paddingVertical: 18, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border },
   readinessItem: { flex: 1, alignItems: 'center', gap: 5 },
   readinessIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: c.secondarySurface },
