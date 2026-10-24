@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Text, View, StyleSheet } from 'react-native';
+import Reanimated, { Easing, LinearTransition, ReduceMotion, SlideOutLeft } from 'react-native-reanimated';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenShell } from '../components/ScreenShell';
 import { AppHeader } from '../components/AppHeader';
@@ -15,6 +16,8 @@ import { useAuth } from '../features/auth/AuthContext';
 import { readDismissedNotificationIds, saveDismissedNotificationIds } from '../features/notifications/notificationDismissals';
 
 const noticeKey = (source: 'family' | 'birth' | 'location' | 'blocking', id: string) => `${source}:${id}`;
+const notificationExit = SlideOutLeft.duration(280).easing(Easing.in(Easing.cubic)).reduceMotion(ReduceMotion.System);
+const notificationLayout = LinearTransition.duration(240).easing(Easing.out(Easing.cubic)).reduceMotion(ReduceMotion.System);
 
 export function NotificationsScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Notifications'>) {
   const { colors: c } = useAppearance(); const s = styles(c);
@@ -54,7 +57,7 @@ export function NotificationsScreen({ navigation }: NativeStackScreenProps<RootS
     try { await family.markRead(); } catch { setError('Could not mark synced notifications as read. Please try again.'); } finally { setBusy(false); }
   };
   const deleteButton = (id: string, title: string) => <MotionPressable accessibilityLabel={`Delete ${title} notification`} style={s.deleteButton} scaleTo={0.9} onPress={() => dismissOne(id)}><Ionicons name="trash-outline" size={18} color={c.danger} /></MotionPressable>;
-  const card = (id: string, unreadCard: boolean, title: string, onPress: () => void, content: ReactNode) => <View key={id} style={[s.card, unreadCard && s.unread]}><MotionPressable style={s.cardTap} onPress={onPress}>{content}</MotionPressable>{deleteButton(id, title)}</View>;
+  const card = (id: string, unreadCard: boolean, title: string, onPress: () => void, content: ReactNode) => <Reanimated.View key={id} exiting={notificationExit} layout={notificationLayout} style={[s.card, unreadCard && s.unread]}><MotionPressable style={s.cardTap} onPress={onPress}>{content}</MotionPressable>{deleteButton(id, title)}</Reanimated.View>;
   const total = allVisibleIds.length;
 
   return <ScreenShell>

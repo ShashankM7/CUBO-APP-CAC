@@ -13,5 +13,8 @@ test('notifications can be deleted individually or cleared with confirmation', (
   assert.match(screen, /Clear all notifications/);
   assert.match(screen, /Clear all notifications\?/);
   assert.match(screen, /saveDismissedNotificationIds/);
+  assert.match(screen, /SlideOutLeft\.duration\(280\)/);
+  assert.match(screen, /exiting=\{notificationExit\}/);
+  assert.match(screen, /new Set\(\[\.\.\.dismissed, \.\.\.allVisibleIds\]\)/);
   assert.match(storage, /AsyncStorage\.setItem/);
 });
