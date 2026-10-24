@@ -81,7 +81,8 @@ test('saved address replies never enter general model context', async () => {
 test('screen never auto-loads model and allows composer in idle quick-answer mode', () => {
   const source = fs.readFileSync('src/screens/CuboAIScreen.web.tsx', 'utf8');
   assert.doesNotMatch(source, /autoAttempted|phase !== 'ready'/);
-  assert.match(source, /General AI · optional/);
-  assert.match(source, /Load general AI<\/button>/);
+  assert.match(source, /className="ai-menu"/);
+  assert.match(source, /'Load General AI'/);
+  assert.doesNotMatch(source, /className="ai-load"/);
   assert.match(source, /maxLength=\{1000\}/);
 });

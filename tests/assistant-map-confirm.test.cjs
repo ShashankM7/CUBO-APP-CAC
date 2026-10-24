@@ -27,10 +27,10 @@ test('cancel, timeout and a different question cannot switch to Map', async () =
   assert.equal(await resolver.answer('what is my score'), null);
   assert.equal(await resolver.answer('yes'), null);
 });
-test('chat exposes explicit switch and stay controls, small attribution and full shortcut hit target', () => {
+test('chat exposes explicit switch and stay controls, menu attribution and full shortcut hit target', () => {
   const screen = fs.readFileSync('src/screens/CuboAIScreen.web.tsx', 'utf8');
   assert.match(screen, /Switch to Map confirmation/); assert.match(screen, />Stay here</);
-  assert.match(screen, /\.cubo-ai \.ai-credit\{/); assert.match(screen, /font:9px/);
+  assert.match(screen, />Llama license</); assert.doesNotMatch(screen, /className="ai-credit"/);
   const home = fs.readFileSync('src/screens/HomeScreen.tsx', 'utf8');
   assert.match(home, /accessibilityLabel="Ask Cubo Assistant"/);
   assert.match(home, /pointerEvents="none"/); assert.match(home, /name="pulse-outline"/);

@@ -84,7 +84,7 @@ test('suggestions do not restart for GPS movement; Home and composer expose requ
   const saved = fs.readFileSync('src/screens/SavedPlaceScreen.tsx', 'utf8');
   assert.match(saved, /usePlaceSuggestions/); assert.doesNotMatch(saved, /setPlaces\(\[\]\)/);
   const chat = fs.readFileSync('src/screens/CuboAIScreen.web.tsx', 'utf8');
-  assert.match(chat, /<span>Voice Assist<\/span>/); assert.match(chat, /General AI · optional/);
+  assert.match(chat, /aria-label=\{voiceOn \? 'Stop Cubo Voice Assist' : 'Start Cubo Voice Assist'\}/); assert.match(chat, /'Load General AI'/);
   assert.match(chat, /navigate\('DriveMap', \{ destination \}\)/); assert.doesNotMatch(chat, /startDrive\(/);
   assert.match(fs.readFileSync('src/screens/HomeScreen.tsx', 'utf8'), /Ask Cubo Assistant/);
 });

@@ -63,7 +63,7 @@ test('composer separates dictation from voice and retains attribution in a closa
   const screen = fs.readFileSync('src/screens/CuboAIScreen.web.tsx', 'utf8');
   const dictation = screen.slice(screen.indexOf('function startListening()'), screen.indexOf('function toggleAssistant()'));
   assert.match(dictation, /setDraft\(previous/); assert.doesNotMatch(dictation, /session.current.send|\.send\(/);
-  assert.match(screen, /Dictate message/); assert.match(screen, /Start Cubo Voice Assist/); assert.match(screen, /pulse-outline/);
+  assert.match(screen, /Dictate message/); assert.match(screen, /Start voice conversation/); assert.match(screen, /const voiceIcon/);
   assert.match(screen, /send\(text, 'voice', true\)/);
   assert.match(screen, /Back to Cubo Assistant/); assert.match(screen, /setLicense\(false\)/);
   assert.match(screen, /fetch\('\/licenses\/llama-3.2.txt'/);
