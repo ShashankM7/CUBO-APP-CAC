@@ -7,6 +7,8 @@ import { shadows } from '../theme/theme';
 
 const PHONE_W = 340;
 const PHONE_H = 780;
+const DESKTOP_BACKGROUND = '#050706';
+const DESKTOP_SPOTLIGHT = 'radial-gradient(circle at 50% 44%, rgba(120, 158, 137, 0.2) 0%, rgba(45, 67, 56, 0.11) 30%, rgba(5, 7, 6, 0) 64%)';
 
 /**
  * Desktop browser “device” chrome so the app feels like a real phone preview.
@@ -14,7 +16,9 @@ const PHONE_H = 780;
  */
 export function PhoneFrame({ children }: { children: ReactNode }) {
   const { colors, mode } = useAppearance();
+  const { width } = useWindowDimensions();
   const [phone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 600);
+  const fullScreen = phone || width < 600;
   const [landscape, setLandscape] = useState(false);
   useEffect(() => {
     if (!phone) return;
@@ -29,21 +33,17 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener('orientationchange', update); orientation?.removeEventListener('change', update); };
   }, [phone]);
   useEffect(() => {
-    document.documentElement.style.backgroundColor = colors.background;
-    document.body.style.backgroundColor = colors.background;
+    const browserBackground = fullScreen ? colors.background : DESKTOP_BACKGROUND;
+    document.documentElement.style.backgroundColor = browserBackground;
+    document.body.style.backgroundColor = browserBackground;
     document.documentElement.style.colorScheme = mode;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.background);
-  }, [colors.background, mode]);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', browserBackground);
+  }, [colors.background, fullScreen, mode]);
   const styles = makeThemeStyles(colors);
-  const { width } = useWindowDimensions();
-  const fullScreen = phone || width < 600;
   // Keep the same child ancestry across breakpoints: replacing wrappers remounts
   // auth, navigation and active-drive state when the browser changes width.
   return (
-    <View style={fullScreen ? { flex: 1, backgroundColor: colors.background } : styles.page}>
-      <View style={[styles.hintWrap, fullScreen && { display: 'none' }]}>
-        <Text style={styles.hint}>CUBO preview — use the phone frame below. Allow camera for live detection.</Text>
-      </View>
+    <View style={fullScreen ? { flex: 1, backgroundColor: colors.background } : [styles.page, { backgroundImage: DESKTOP_SPOTLIGHT } as any]}>
       <View style={fullScreen ? { flex: 1, width: '100%' } : styles.deviceOuter}>
         <View style={fullScreen ? { flex: 1 } : styles.bezel}>
           <View style={[styles.notch, fullScreen && { display: 'none' }]} />
@@ -56,6 +56,9 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
           </View>
         </View>
       </View>
+      <View style={[styles.installNoteWrap, fullScreen && { display: 'none' }]}>
+        <Text style={styles.installNote}>Designed for phone use. On iPhone, open CUBO in Safari, tap Share, then Add to Home Screen. On Android, open it in Chrome, open the menu, then choose Install app or Add to Home screen.</Text>
+      </View>
     </View>
   );
 }
@@ -65,28 +68,29 @@ const makeThemeStyles = (colors: AppColors) => StyleSheet.create({
     flex: 1,
     width: '100%' as any,
     minHeight: '100vh' as any,
-    backgroundColor: colors.pageBg,
+    backgroundColor: DESKTOP_BACKGROUND,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingHorizontal: 16,
+    gap: 14,
   },
-  hintWrap: {
-    maxWidth: PHONE_W + 40,
-    marginBottom: 16,
-    paddingHorizontal: 8,
+  installNoteWrap: {
+    width: '100%' as any,
+    maxWidth: 520,
+    paddingHorizontal: 18,
   },
-  hint: {
-    color: colors.textMuted,
-    fontSize: 13,
+  installNote: {
+    color: 'rgba(225, 233, 228, 0.56)',
+    fontSize: 11,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 17,
   },
   deviceOuter: {
     width: PHONE_W,
     height: PHONE_H,
     maxWidth: '100%' as any,
-    maxHeight: '90vh' as any,
+    maxHeight: 'calc(100vh - 92px)' as any,
     ...shadows.phone,
   },
   bezel: {

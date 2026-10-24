@@ -89,6 +89,12 @@ test('phone frame does not select desktop chrome on a rotated phone; native rema
   const frame = fs.readFileSync('src/components/PhoneFrame.web.tsx', 'utf8');
   assert.match(frame, /phone \|\| width < 600/); assert.match(frame, /screen.orientation\?\.angle/);
   assert.match(frame, /Keep CUBO upright/);
+  assert.match(frame, /DESKTOP_BACKGROUND = '#050706'/);
+  assert.match(frame, /radial-gradient\(circle at 50% 44%/);
+  assert.match(frame, /Designed for phone use/);
+  assert.match(frame, /Safari, tap Share, then Add to Home Screen/);
+  assert.match(frame, /Chrome, open the menu, then choose Install app or Add to Home screen/);
+  assert.doesNotMatch(frame, /CUBO preview — use the phone frame below/);
   assert.equal(JSON.parse(fs.readFileSync('app.json', 'utf8')).expo.orientation, 'portrait');
   assert.match(fs.readFileSync('scripts/prepare-web.cjs', 'utf8'), /orientation: 'portrait'/);
 });
