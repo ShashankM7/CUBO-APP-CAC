@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MotionPressable } from '../components/MotionPressable';
 import { ScreenShell } from '../components/ScreenShell';
 import { AppInviteSheet } from '../components/AppInviteSheet';
-import { MapSourcePreference } from '../components/MapSourcePreference';
 import { MediaAccessPreference } from '../components/MediaAccessPreference';
 import { VoicePreference } from '../components/VoicePreference';
 import { ProfileAvatar } from '../components/ProfileAvatar';
@@ -64,7 +63,6 @@ export function ProfileScreen() {
       {appearanceOpen ? <View accessibilityRole="radiogroup" style={{ paddingVertical: 4 }}>{([{ value: 'system', label: 'System appearance' }, { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }] as const).map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: preference === option.value }} onPress={() => { setMode(option.value); setAppearanceOpen(false); }} style={[styles.row, styles.lastRow, { paddingHorizontal: 12, minHeight: 48, borderRadius: 12, backgroundColor: preference === option.value ? colors.accentSoft : 'transparent' }]}><Text style={[styles.rowTitle, styles.fill]}>{option.label}</Text>{preference === option.value ? <Ionicons name="checkmark" size={20} color={colors.accent} /> : null}</Pressable>)}</View> : null}
       <ToggleRow icon="notifications-outline" title="Safety Notifications" value={notifications} onChange={() => setNotifications((value) => !value)} colors={colors} styles={styles} />
       <ToggleRow icon="document-text-outline" title="Trip Reports" value={tripReports} onChange={() => setTripReports((value) => !value)} colors={colors} styles={styles} />
-      <MapSourcePreference />
       <MediaAccessPreference />
       <VoicePreference />
     </View>

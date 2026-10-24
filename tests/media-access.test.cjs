@@ -76,9 +76,10 @@ test('permission query never starts hardware; grant checks request only selected
     await assert.rejects(access.requestMediaAccess('microphone'), /blocked/);
   } finally { if (original) Object.defineProperty(global, 'navigator', original); else delete global.navigator; global.isSecureContext = secure; }
 });
-test('permissions setting follows map source and does not activate a preview or fake stored permission', () => {
+test('permissions setting remains in account without exposing the map source selector', () => {
   const profile = fs.readFileSync('src/screens/ProfileScreen.tsx', 'utf8');
-  assert.ok(profile.indexOf('<MediaAccessPreference />') > profile.indexOf('<MapSourcePreference />'));
+  assert.match(profile, /<MediaAccessPreference \/>/);
+  assert.doesNotMatch(profile, /MapSourcePreference/);
   if (profile.includes('<VoicePreference />')) assert.ok(profile.indexOf('<MediaAccessPreference />') < profile.indexOf('<VoicePreference />'));
   const view = fs.readFileSync('src/components/MediaAccessPreference.tsx', 'utf8');
   assert.match(view, /requestMediaAccess\(kind, request.signal\)/); assert.match(view, /activeSession/);
