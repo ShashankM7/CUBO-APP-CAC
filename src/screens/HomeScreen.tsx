@@ -23,6 +23,7 @@ import { useAppBlocking } from '../features/appBlocking/AppBlockingContext';
 import { useConnections } from '../features/connections/ConnectionContext';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { useAuth } from '../features/auth/AuthContext';
+import { readDismissedNotificationIds } from '../features/notificationDismissals';
 
 export function HomeScreen() {
   const { colors: c } = useAppearance();
@@ -37,9 +38,20 @@ export function HomeScreen() {
   const appBlocking = useAppBlocking();
   const insurance = useInsurance();
   const insurer = insurance.providerId === 'other' && insurance.customProviderName?.trim() ? { name: insurance.customProviderName.trim() } : insuranceProviders.find(p => p.id === insurance.providerId);
-  const unreadCount = family.notifications.filter(item => !item.read).length + appBlocking.notices.filter(item => !item.read).length;
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const unreadCount = family.notifications.filter(item => !item.read && !dismissedNotifications.has(`family:${item.id}`)).length
+    + appBlocking.notices.filter(item => !item.read && !dismissedNotifications.has(`blocking:${item.id}`)).length;
   const [calibration, setCalibration] = useState<CalibrationRecord | null>(null);
-  useFocusEffect(useCallback(() => { let active = true; void readCalibration().then(value => { if (active) setCalibration(value); }); return () => { active = false; }; }, []));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void readCalibration().then(value => { if (active) setCalibration(value); });
+    if (user?.uid) {
+      void readDismissedNotificationIds(user.uid).then(value => { if (active) setDismissedNotifications(value); });
+    } else {
+      setDismissedNotifications(new Set());
+    }
+    return () => { active = false; };
+  }, [user?.uid]));
   const selected = vehicles.find(v => v.primary) ?? vehicles[0];
   const go = (destination?: PlaceResult) => navigation.navigate('DriveMap', destination ? { destination } : undefined);
   return <ScreenShell>
