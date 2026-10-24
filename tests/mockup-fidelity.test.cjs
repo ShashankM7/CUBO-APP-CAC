@@ -41,7 +41,10 @@ test('Home uses the approved full-width cockpit with live account score and acti
 test('Cubo Assistant uses a friendly animated character and distinct chat bubbles', () => {
   const assistant = read('src/screens/CuboAIScreen.web.tsx');
   assert.match(assistant, /assets\/assistant\/cubo-droid\.png/);
-  assert.match(assistant, /className="ai-droid-shell"/);
+  assert.match(assistant, /className="ai-companion"/);
+  assert.match(assistant, /id="ai-companion-title">What can we figure out together\?/);
+  assert.match(assistant, /className="ai-droid-shell ai-droid-shell-compact"/);
+  assert.doesNotMatch(assistant, /!data\?\.messages\.length && <div className="ai-welcome"><div className="ai-droid-shell"/);
   assert.match(assistant, /--ai-user-bubble/);
   assert.match(assistant, /--ai-assistant-bubble/);
   assert.match(assistant, /@keyframes ai-float/);
