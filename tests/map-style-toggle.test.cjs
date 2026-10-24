@@ -10,6 +10,8 @@ test('web driving map offers an accessible street and satellite toggle', () => {
   const map = read('src/components/DrivingMap.web.tsx');
   assert.match(screen, /accessibilityRole="switch"/);
   assert.match(screen, /accessibilityLabel="Satellite view"/);
-  assert.match(map, /s2cloudless-2025_3857/);
-  assert.match(map, /Satellite © EOX \/ Copernicus 2025/);
+  assert.match(map, /server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery/);
+  assert.match(map, /Esri, Vantor, Earthstar, GIS Community/);
+  assert.doesNotMatch(map, /s2cloudless-2025_3857/);
+  assert.match(map, /transportation/);
 });

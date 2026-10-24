@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Timestamp, collection, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, type QuerySnapshot } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, type QuerySnapshot } from 'firebase/firestore';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { blockingSummary, makeBlockingPolicy, type AppBlockingPolicy } from './policy';
+import { blockingSummary, makeBlockingPolicy, policyForAccountType, type AppBlockingPolicy } from './policy';
 import type { BlockAppDef } from '../../data/blockApps';
 import { mergeAppBlocking, normalizeAppBlocking, type SyncedAppBlocking } from '../sync/domainData';
 import { useAccountSyncBridge } from '../sync/useAccountSyncBridge';
@@ -24,7 +24,7 @@ type Value = {
 const Context = createContext<Value | null>(null);
 
 export function AppBlockingProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, accountDetails } = useAuth();
   const [owner, setOwner] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalRecord, setHasLocalRecord] = useState(false);
@@ -62,6 +62,7 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
       return [item.id, makeBlockingPolicy(item.id, data.targetName, { enabled: data.enabled, lockedByParent: data.lockedByParent, selectedIds: data.selectedIds, updatedAt })];
     }));
     const addMinorNotice = (next: Record<string, AppBlockingPolicy>) => {
+      if (accountDetails?.accountType === 'adult') return;
       const policy = next[user.uid];
       if (!policy?.updatedAt) return;
       const id = `family-block-${policy.updatedAt}`;
@@ -88,7 +89,19 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
       ),
     ];
     return () => unsubs.forEach(unsub => unsub());
-  }, [hydrated, user?.uid]);
+  }, [accountDetails?.accountType, hydrated, user?.uid]);
+  useEffect(() => {
+    if (!hydrated || !user || accountDetails?.accountType !== 'adult') return;
+    setPolicies(current => {
+      const own = current[user.uid];
+      if (!own?.lockedByParent) return current;
+      return { ...current, [user.uid]: policyForAccountType(own, 'adult') };
+    });
+    const assigned = familyPolicies[user.uid];
+    if (!assigned) return;
+    setPolicies(current => current[user.uid] ? current : { ...current, [user.uid]: policyForAccountType(assigned, 'adult') });
+    void deleteDoc(doc(db, 'familyAppPolicies', user.uid)).catch(() => undefined);
+  }, [accountDetails?.accountType, familyPolicies, hydrated, user?.uid]);
   useEffect(() => {
     if (!hydrated || !user || owner !== user.uid) return;
     const value: Stored = { version: 1, policies, notices: notices.slice(0, 30) };
@@ -111,10 +124,13 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
       ).notices);
     },
   });
-  const policyFor = useCallback((targetUid = user?.uid ?? 'signed-out', targetName = user?.displayName ?? 'You') => makeBlockingPolicy(targetUid, targetName, familyPolicies[targetUid] ?? policies[targetUid]), [familyPolicies, policies, user?.uid, user?.displayName]);
+  const policyFor = useCallback((targetUid = user?.uid ?? 'signed-out', targetName = user?.displayName ?? 'You') => {
+    const policy = makeBlockingPolicy(targetUid, targetName, familyPolicies[targetUid] ?? policies[targetUid]);
+    return targetUid === user?.uid ? policyForAccountType(policy, accountDetails?.accountType) : policy;
+  }, [accountDetails?.accountType, familyPolicies, policies, user?.uid, user?.displayName]);
   const savePolicy = useCallback(async (input: AppBlockingPolicy, parentManaged = false, connectionId?: string) => {
     if (!user || owner !== user.uid) return;
-    const policy = makeBlockingPolicy(input.targetUid, input.targetName, { ...input, lockedByParent: parentManaged && input.lockedByParent, updatedAt: new Date().toISOString() });
+    const policy = policyForAccountType(makeBlockingPolicy(input.targetUid, input.targetName, { ...input, lockedByParent: parentManaged && input.lockedByParent, updatedAt: new Date().toISOString() }), input.targetUid === user.uid ? accountDetails?.accountType : undefined);
     if (parentManaged) {
       if (!connectionId) throw Error('This family connection is not ready for parent controls.');
       const reference = doc(db, 'familyAppPolicies', policy.targetUid);
@@ -123,7 +139,7 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
       setFamilyPolicies(current => ({ ...current, [policy.targetUid]: policy }));
       return;
     }
-    const assignedPolicy = familyPolicies[user.uid];
+    const assignedPolicy = accountDetails?.accountType === 'adult' ? undefined : familyPolicies[user.uid];
     if (policy.targetUid === user.uid && assignedPolicy) {
       if (assignedPolicy.lockedByParent) throw Error('Child Lock is on. Your family organizer controls this list.');
       await updateDoc(doc(db, 'familyAppPolicies', user.uid), { enabled: policy.enabled, selectedIds: policy.selectedIds, updatedAt: serverTimestamp() });
@@ -131,14 +147,14 @@ export function AppBlockingProvider({ children }: { children: ReactNode }) {
       return;
     }
     setPolicies(current => ({ ...current, [policy.targetUid]: policy }));
-  }, [familyPolicies, owner, user?.uid]);
+  }, [accountDetails?.accountType, familyPolicies, owner, user?.uid]);
   const beginDrive = useCallback(() => {
     if (!user || owner !== user.uid) return null;
-    const policy = makeBlockingPolicy(user.uid, user.displayName ?? 'You', familyPolicies[user.uid] ?? policies[user.uid]);
+    const policy = policyForAccountType(makeBlockingPolicy(user.uid, user.displayName ?? 'You', familyPolicies[user.uid] ?? policies[user.uid]), accountDetails?.accountType);
     const apps = blockingSummary(policy);
     const plan = apps.length ? { policy, apps } : null;
     setActivePlan(plan); return plan;
-  }, [familyPolicies, owner, policies, user?.uid, user?.displayName]);
+  }, [accountDetails?.accountType, familyPolicies, owner, policies, user?.uid, user?.displayName]);
   const endDrive = useCallback(() => setActivePlan(null), []);
   const markNoticesRead = useCallback((id?: string) => setNotices(current => current.map(item => !id || item.id === id ? { ...item, read: true } : item)), []);
   const value = useMemo<Value>(() => ({ hydrated, policyFor, savePolicy, beginDrive, endDrive, activePlan, notices, markNoticesRead }), [hydrated, policyFor, savePolicy, beginDrive, endDrive, activePlan, notices, markNoticesRead]);

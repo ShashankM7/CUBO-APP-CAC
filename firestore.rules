@@ -466,7 +466,8 @@ service cloud.firestore {
       allow delete: if isAuthenticated()
         && (resource.data.organizerUid == request.auth.uid
           || (resource.data.minorUid == request.auth.uid
-            && !existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))));
+            && (!existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))
+              || isAdultAccount(request.auth.uid))));
     }
 
     match /connections/{connectionId} {

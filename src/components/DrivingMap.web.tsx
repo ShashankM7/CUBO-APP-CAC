@@ -28,7 +28,7 @@ const MapContext = createContext<LibreMap | null>(null);
 const coords = (point: Coordinate): [number, number] => [point.longitude, point.latitude];
 const valid = (p: Coordinate) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 85 && Math.abs(p.longitude) <= 180;
 const streetStyle = (appearance: Props['userInterfaceStyle']) => `https://tiles.openfreemap.org/styles/${appearance === 'dark' ? 'dark' : 'liberty'}`;
-const satelliteTiles = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg';
+const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 function satelliteStyle(appearance: Props['userInterfaceStyle']) {
   return (_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification => {
@@ -36,11 +36,11 @@ function satelliteStyle(appearance: Props['userInterfaceStyle']) {
     const roadIndex = layers.findIndex(layer => 'source-layer' in layer && layer['source-layer'] === 'transportation');
     layers.splice(roadIndex < 0 ? Math.max(1, layers.length - 1) : roadIndex, 0, {
       id: 'cubo-satellite', type: 'raster', source: 'cubo-satellite',
-      paint: { 'raster-opacity': appearance === 'dark' ? .82 : .94, 'raster-saturation': -.08, 'raster-contrast': .08 },
+      paint: { 'raster-opacity': appearance === 'dark' ? .86 : .97, 'raster-saturation': -.06, 'raster-contrast': .06, 'raster-resampling': 'linear' },
     });
     return {
       ...next,
-      sources: { ...next.sources, 'cubo-satellite': { type: 'raster', tiles: [satelliteTiles], tileSize: 256, attribution: 'Satellite © EOX / Copernicus 2025' } },
+      sources: { ...next.sources, 'cubo-satellite': { type: 'raster', tiles: [satelliteTiles], tileSize: 256, maxzoom: 19, attribution: 'Imagery © <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noreferrer">Esri, Vantor, Earthstar, GIS Community</a>' } },
       layers,
     };
   };
