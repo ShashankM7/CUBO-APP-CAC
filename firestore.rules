@@ -488,7 +488,7 @@ service cloud.firestore {
             && (!existsAfter(/databases/$(database)/documents/connections/$(resource.data.connectionId))
               || isAdultAccount(request.auth.uid)))
           || ((resource.data.organizerUid == request.auth.uid || resource.data.minorUid == request.auth.uid)
-            && accountDeletionRequested(request.auth.uid));
+            && accountDeletionRequested(request.auth.uid)));
     }
 
     match /connections/{connectionId} {
