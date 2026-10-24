@@ -33,6 +33,8 @@ test('Home uses the approved full-width cockpit with live account score and acti
   assert.match(home, /Animated\.ScrollView[\s\S]*setPrimary\(vehicle\.id\)/);
   assert.match(home, /accessibilityLabel="Add another vehicle"/);
   assert.match(home, /style=\{s\.vehicleDots\}/);
+  assert.match(home, /listener: \(event: any\) => settleVehiclePage/);
+  assert.match(home, /onPress=\{\(\) => showVehiclePage\(index\)\}/);
   assert.match(home, /connections\.connections\.map/);
   assert.match(home, /contentContainerStyle=\{s\.peopleScroller\}/);
   assert.doesNotMatch(home, /apps blocked|Location On/);
@@ -61,7 +63,7 @@ test('idle map has one destination sheet, saved places and no unhelpful back-hom
   assert.ok(map.indexOf('<View style={styles.topCard}>') > map.indexOf('<View style={[styles.bottomCard,'));
   assert.match(map, /kind: 'home'.*place: home/);
   assert.match(map, /kind: 'work'.*place: work/);
-  assert.match(map, /activeSession \|\| navigationRoute/);
+  assert.match(map, /navigationRoute && <>/);
   assert.match(map, /accessibilityState=\{\{ disabled: true \}\}/);
   assert.doesNotMatch(map, />Back to home</);
   assert.match(map, /<DriveVoiceControl/);
@@ -71,10 +73,15 @@ test('idle map has one destination sheet, saved places and no unhelpful back-hom
   assert.match(map, /const idleSheetCollapsedHeight = 96/);
   assert.match(map, /setIdleSheetExpanded\(true\)/);
   assert.match(map, /accessibilityLabel=\{idleSheetExpanded \? 'Swipe down or tap to collapse destination panel' : 'Swipe up or tap to expand destination panel'\}/);
-  assert.match(map, /\.\.\.idleSheetPan\.panHandlers/);
+  assert.match(map, /activeSession \? driveSheetPan\.panHandlers : idleSheetPan\.panHandlers/);
   assert.match(map, /onMoveShouldSetPanResponderCapture/);
   assert.match(map, /bottomCard: \{[^}]*overflow: 'hidden'/);
   assert.match(map, /activeSession && styles\.bottomCardDrive/);
+  assert.match(map, /const driveSheetCollapsedHeight = 112/);
+  assert.match(map, /activeSession \? driveSheetPan\.panHandlers : idleSheetPan\.panHandlers/);
+  assert.match(map, /Swipe down or tap to collapse drive controls/);
+  assert.match(map, /styles\.endDriveCompact/);
+  assert.match(map, /pointerEvents=\{driveSheetExpanded \? 'auto' : 'none'\}/);
   assert.match(map, /style=\{styles\.monitoringRow\}/);
   assert.match(map, /style=\{styles\.statBlock\}/);
   assert.match(map, /Animated\.spring\(idleSheetProgress/);
@@ -105,4 +112,12 @@ test('web map uses a bounded normalized drawing buffer at fractional browser zoo
   const map = read('src/components/DrivingMap.web.tsx');
   assert.match(map, /Math.max\(1, Math.min\(2, Math.round\(window.devicePixelRatio \|\| 1\)\)\)/);
   assert.match(map, /new LibreMap\(\{ container: host.current, pixelRatio,/);
+  assert.doesNotMatch(map, /AttributionControl/);
+  assert.match(map, />© OSM<\/a>/);
+});
+
+test('live recenter uses the driver fix itself instead of projecting the camera ahead', () => {
+  const map = read('src/screens/MapScreen.web.tsx');
+  assert.match(map, /animateCamera\(\{ center: gps\.point,/);
+  assert.doesNotMatch(map, /projectAhead/);
 });

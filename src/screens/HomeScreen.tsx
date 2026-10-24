@@ -44,6 +44,7 @@ export function HomeScreen() {
   const [locationMessage, setLocationMessage] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
   const locationRequest = useRef<AbortController | null>(null);
+  const vehiclePagerRef = useRef<ScrollView>(null);
   const vehicleScrollX = useRef(new Animated.Value(0)).current;
   const [vehiclePage, setVehiclePage] = useState(0);
   const [vehiclePageWidth, setVehiclePageWidth] = useState(Math.max(280, Math.min(386, width - 44)));
@@ -66,6 +67,16 @@ export function HomeScreen() {
   const blockingPolicy = appBlocking.policyFor(user?.uid, profile.name || 'You');
   const vehiclePages = [...vehicles, null];
   const go = (destination?: PlaceResult) => navigation.navigate('DriveMap', destination ? { destination } : undefined);
+
+  const settleVehiclePage = (offset: number) => {
+    const next = Math.max(0, Math.min(vehiclePages.length - 1, Math.round(offset / Math.max(1, vehiclePageWidth))));
+    setVehiclePage(next);
+  };
+  const showVehiclePage = (index: number) => {
+    const next = Math.max(0, Math.min(vehiclePages.length - 1, index));
+    setVehiclePage(next);
+    vehiclePagerRef.current?.scrollTo({ x: next * vehiclePageWidth, y: 0, animated: true });
+  };
 
   useEffect(() => {
     setVehiclePage(current => Math.min(current, Math.max(0, vehiclePages.length - 1)));
@@ -143,6 +154,7 @@ export function HomeScreen() {
       <View style={s.sectionHeader}><View><Text style={s.section}>Your Garage</Text><Text style={s.sectionHint}>Swipe to choose your active vehicle.</Text></View><MotionPressable onPress={() => navigation.navigate('Garage')}><Text style={s.link}>Manage</Text></MotionPressable></View>
       <View style={s.vehiclePager} onLayout={event => setVehiclePageWidth(event.nativeEvent.layout.width)}>
         <Animated.ScrollView
+          ref={vehiclePagerRef}
           horizontal
           pagingEnabled
           decelerationRate="fast"
@@ -150,8 +162,9 @@ export function HomeScreen() {
           snapToAlignment="start"
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: vehicleScrollX } } }], { useNativeDriver: true })}
-          onMomentumScrollEnd={event => setVehiclePage(Math.max(0, Math.min(vehiclePages.length - 1, Math.round(event.nativeEvent.contentOffset.x / vehiclePageWidth))))}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: vehicleScrollX } } }], { useNativeDriver: false, listener: (event: any) => settleVehiclePage(event.nativeEvent.contentOffset.x) })}
+          onScrollEndDrag={event => settleVehiclePage(event.nativeEvent.contentOffset.x)}
+          onMomentumScrollEnd={event => settleVehiclePage(event.nativeEvent.contentOffset.x)}
         >
           {vehiclePages.map((vehicle, index) => {
             const inputRange = [(index - 1) * vehiclePageWidth, index * vehiclePageWidth, (index + 1) * vehiclePageWidth];
@@ -166,7 +179,7 @@ export function HomeScreen() {
           })}
         </Animated.ScrollView>
       </View>
-      <View accessibilityRole="tablist" style={s.vehicleDots}>{vehiclePages.map((vehicle, index) => <View key={vehicle?.id ?? 'add-dot'} style={[s.vehicleDot, index === vehiclePage && s.vehicleDotActive]} />)}</View>
+      <View accessibilityRole="tablist" style={s.vehicleDots}>{vehiclePages.map((vehicle, index) => <MotionPressable key={vehicle?.id ?? 'add-dot'} accessibilityRole="tab" accessibilityLabel={vehicle ? `Show ${vehicle.make} ${vehicle.model}` : 'Show add vehicle'} accessibilityState={{ selected: index === vehiclePage }} onPress={() => showVehiclePage(index)} scaleTo={.9} style={s.vehicleDotTarget}><View style={[s.vehicleDot, index === vehiclePage && s.vehicleDotActive]} /></MotionPressable>)}</View>
 
       <View style={s.sectionHeader}><View><Text style={s.section}>Family / Friends</Text><Text style={s.sectionHint}>The people you choose to stay connected with.</Text></View><MotionPressable onPress={() => navigation.navigate('Connections')}><Text style={s.link}>Manage</Text></MotionPressable></View>
       <View style={s.peoplePanel}>
@@ -231,6 +244,7 @@ const makeThemeStyles = (c: AppColors) => StyleSheet.create({
   addVehicleTitle: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 16 },
   addVehicleMeta: { color: c.textSecondary, fontSize: 11, marginTop: 4 },
   vehicleDots: { minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  vehicleDotTarget: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   vehicleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
   vehicleDotActive: { width: 20, backgroundColor: c.accent },
   peoplePanel: { borderRadius: 24, padding: 16, backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border },

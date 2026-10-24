@@ -1,6 +1,6 @@
 import { createContext, forwardRef, useContext, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Map as LibreMap, Marker as LibreMarker, LngLatBounds, AttributionControl, type GeoJSONSource } from 'maplibre-gl';
+import { Map as LibreMap, Marker as LibreMarker, LngLatBounds, type GeoJSONSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { applyWebDarkMapPaint } from './webDarkMapPaint';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
@@ -66,7 +66,6 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
       const pixelRatio = Math.max(1, Math.min(2, Math.round(window.devicePixelRatio || 1)));
       current = new LibreMap({ container: host.current, pixelRatio, style: `https://tiles.openfreemap.org/styles/${props.userInterfaceStyle === 'dark' ? 'dark' : 'liberty'}`, center: coords(props.initialRegion), zoom: 13, attributionControl: false, interactive: props.interactive ?? true });
       instance.current = current;
-      current.addControl(new AttributionControl({ compact: true }), 'top-left');
       current.on('styleimagemissing', event => {
         if (!current?.hasImage(event.id)) current?.addImage(event.id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
       });
@@ -81,8 +80,9 @@ export default forwardRef<MapView, Props>(function DrivingMap(props, ref) {
     return () => { live = false; clearTimeout(timer); observer?.disconnect(); instance.current = null; current?.remove(); };
   }, [props.userInterfaceStyle, attempt]);
   return <View style={props.style}>
-    <style>{`.${scope} .maplibregl-ctrl-top-left{top:auto;bottom:${props.attributionBottom ?? 250}px;left:4px}.${scope} .maplibregl-ctrl-attrib{font:10px/18px sans-serif;max-width:220px}.${scope} canvas{outline:none}`}</style>
+    <style>{`.${scope} canvas{outline:none}`}</style>
     <div ref={host} className={scope} aria-label={props.interactive === false ? 'Trip route map' : 'Driving map'} style={{ position: 'absolute', inset: 0 }} />
+    <a aria-label="Map data attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" style={{ position: 'absolute', zIndex: 1, right: 6, bottom: props.attributionBottom ?? 250, color: props.userInterfaceStyle === 'dark' ? 'rgba(231,239,235,.48)' : 'rgba(22,40,32,.48)', font: '9px/14px Manrope_500Medium, sans-serif', textDecoration: 'none', letterSpacing: '.01em' }}>© OSM</a>
     <MapContext.Provider value={map}>{props.children}{props.showsUserLocation && props.userLocation && <Marker coordinate={props.userLocation}><div aria-label="Your location" style={{ width: 16, height: 16, borderRadius: 20, background: '#2985E8', border: '3px solid white', boxShadow: '0 0 0 8px #2985e826' }} /></Marker>}</MapContext.Provider>
     {error && <div role="status" style={{ position: 'absolute', top: '42%', left: 12, right: 64, padding: 12, borderRadius: 12, background: '#FFFFFF', color: '#162820', font: '12px sans-serif' }}>{error}<button style={{ minHeight: 44, marginLeft: 8 }} onClick={() => setAttempt(n => n + 1)}>Retry map</button></div>}
   </View>;
