@@ -10,7 +10,7 @@ import { useDrives } from '../features/drives/DriveContext';
 import { useVehicles } from '../features/vehicles/VehicleContext';
 import { insuranceProviders } from '../features/insurance/InsuranceContext';
 import { accountContext } from '../features/cuboAI/appContext';
-import { CuboAIVoice } from '../features/cuboAI/browserVoice';
+import { CuboAIVoice, isRecoverableMicrophoneFailure } from '../features/cuboAI/browserVoice';
 import type { DriveVoiceSnapshot } from '../features/cuboAI/driveCommands';
 import { DriveConversation } from '../features/cuboAI/driveConversation';
 import { readVoicePreference } from '../features/cuboAI/voicePreference';
@@ -19,6 +19,9 @@ import { driveConsent } from '../features/cuboAI/driveConsent';
 import type { VoiceRouteResult } from '../features/navigation/voiceRoutes';
 import { useAppBlocking } from '../features/appBlocking/AppBlockingContext';
 import { BLOCK_APPS } from '../data/blockApps';
+import { VoiceAssistIcon } from './VoiceAssistIcon';
+import { requestMediaAccess } from '../features/permissions/mediaAccess';
+import { accessError } from '../features/permissions/accessErrors';
 
 type Props = { live: Pick<DriveVoiceSnapshot, 'point' | 'gpsValid' | 'speed' | 'nextTurn' | 'destination' | 'routeSteps' | 'routeIndex' | 'routeId' | 'remainingSeconds' | 'remainingMiles'>; onStatus: (text: string) => void; onReroute?: (choice: number | undefined, signal: AbortSignal) => Promise<VoiceRouteResult> };
 export function DriveVoiceControl(props: Props) {
@@ -35,6 +38,7 @@ function Control({ live, onStatus, onReroute, uid, tripId }: Props & { uid: stri
   const blockedAppNames = BLOCK_APPS.filter(app => blockedAppsPolicy.selectedIds.includes(app.id)).map(app => app.name);
   const [details, setDetails] = useState<LocalAnswerDetails>({});
   const [enabled, setEnabled] = useState(false); const [notice, setNotice] = useState(false);
+  const [micRecovery, setMicRecovery] = useState(false); const [micRetrying, setMicRetrying] = useState(false); const micRecoveryShown = useRef(false);
   const [consent] = useState(() => { let store; try { store = window.sessionStorage; } catch {} return driveConsent(store, uid, tripId); });
   const conversation = useRef<DriveConversation | null>(null); const voice = useRef<CuboAIVoice | null>(null);
   const routeRequest = useRef<AbortController | null>(null);
@@ -61,6 +65,17 @@ function Control({ live, onStatus, onReroute, uid, tripId }: Props & { uid: stri
     return () => { alive.current = false; conversation.current?.stop(); voice.current?.dispose(); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('cubo-attention-warning', warning); };
   }, [uid, tripId]);
   useEffect(() => { if (!focused) { conversation.current?.stop(); setNotice(false); } }, [focused]);
+  function recoverMicrophone(message: string) {
+    if (isRecoverableMicrophoneFailure(message) && !micRecoveryShown.current) { micRecoveryShown.current = true; conversation.current?.stop(); setEnabled(false); setMicRecovery(true); onStatus(''); }
+    else onStatus(message);
+  }
+  async function enableMicrophoneAndRetry() {
+    if (micRetrying) return;
+    setMicRetrying(true);
+    try { await requestMediaAccess('microphone'); setMicRecovery(false); start(); }
+    catch (cause) { setMicRecovery(false); onStatus(accessError(cause)); }
+    finally { setMicRetrying(false); }
+  }
   function start() {
     setNotice(false);
     consent.accept();
@@ -86,11 +101,11 @@ function Control({ live, onStatus, onReroute, uid, tripId }: Props & { uid: stri
       addVoiceTurn(tripId, 'user', text);
       addVoiceTurn(tripId, 'assistant', result.text);
       return result;
-    }, (active, text) => { if (!active) routeRequest.current?.abort(); if (alive.current) { setEnabled(active); latest.current.onStatus(text); } }, Date.now, commands);
+    }, (active, text) => { if (!active) routeRequest.current?.abort(); if (alive.current) { setEnabled(active); if (!active && text !== 'Voice off') recoverMicrophone(text); else latest.current.onStatus(text); } }, Date.now, commands);
     conversation.current.start();
   }
   return <><Pressable accessibilityRole="switch" accessibilityLabel="Cubo Voice Assist" accessibilityState={{ checked: enabled }} onPress={() => enabled ? conversation.current?.stop() : consent.accepted() ? start() : setNotice(true)} style={{ flex: .54, minWidth: 44, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: enabled ? c.accent : c.surfaceMuted, borderWidth: 1, borderColor: enabled ? c.accent : c.borderStrong }}>
-    <Ionicons name="sparkles-outline" size={22} color={enabled ? c.onAccent : c.textSecondary} />
+    <VoiceAssistIcon size={23} color={enabled ? c.onAccent : c.textSecondary} />
   </Pressable><Modal visible={notice} transparent animationType="fade" onRequestClose={() => setNotice(false)}>
     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.55)', justifyContent: 'center', padding: 24 }}><View accessibilityViewIsModal style={{ backgroundColor: c.card, padding: 24, borderRadius: 24, gap: 16, maxWidth: 420, width: '100%', alignSelf: 'center' }}>
       <Text style={{ color: c.text, fontSize: 22, fontWeight: '700' }}>Cubo Voice Assist</Text>
@@ -99,5 +114,5 @@ function Control({ live, onStatus, onReroute, uid, tripId }: Props & { uid: stri
       <Pressable onPress={start} style={{ backgroundColor: c.accent, padding: 15, borderRadius: 14, alignItems: 'center' }}><Text style={{ color: c.onAccent, fontWeight: '700' }}>Agree & start listening</Text></Pressable>
       <Pressable onPress={() => setNotice(false)} style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: c.textSecondary }}>Not now</Text></Pressable>
     </View></View>
-  </Modal></>;
+  </Modal><Modal visible={micRecovery} transparent animationType="fade" onRequestClose={() => setMicRecovery(false)}><View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.55)', justifyContent: 'center', padding: 24 }}><View accessibilityViewIsModal style={{ backgroundColor: c.card, padding: 24, borderRadius: 24, gap: 16, maxWidth: 420, width: '100%', alignSelf: 'center' }}><View style={{ width: 60, height: 60, borderRadius: 30, alignSelf: 'center', backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="mic-outline" size={28} color={c.onAccent} /></View><Text style={{ color: c.text, fontSize: 22, fontWeight: '700', textAlign: 'center' }}>Enable your microphone</Text><Text style={{ color: c.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>CUBO did not detect usable audio. Open the browser microphone prompt, then Voice Assist will retry once.</Text><Pressable disabled={micRetrying} onPress={() => void enableMicrophoneAndRetry()} style={{ backgroundColor: c.accent, padding: 15, borderRadius: 14, alignItems: 'center' }}><Text style={{ color: c.onAccent, fontWeight: '700' }}>{micRetrying ? 'Checking microphone…' : 'Enable microphone & retry'}</Text></Pressable><Pressable disabled={micRetrying} onPress={() => setMicRecovery(false)} style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: c.textSecondary }}>Not now</Text></Pressable></View></View></Modal></>;
 }

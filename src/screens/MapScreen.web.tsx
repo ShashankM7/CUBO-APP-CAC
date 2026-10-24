@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useRoute, useNavigation, usePreventRemove, type NavigationProp } from '@react-navigation/native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Keyboard, Platform, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Image, Keyboard, Modal, Platform, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import MapView, { Marker, Polyline, type MapView as MapHandle, type Region } from '../components/DrivingMap.web';
 import Reanimated, { Easing, FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,12 +30,16 @@ import { spacing } from '../theme/theme';
 import { useAppBlocking, type DriveBlockPlan } from '../features/appBlocking/AppBlockingContext';
 import { DriveBlockModal } from '../components/DriveBlockModal';
 import { distanceToRouteMeters, LiveNavigationTracker } from '../features/navigation/liveNavigation';
-import { CuboAIVoice } from '../features/cuboAI/browserVoice';
+import { CuboAIVoice, isRecoverableMicrophoneFailure } from '../features/cuboAI/browserVoice';
 import { readVoicePreference } from '../features/cuboAI/voicePreference';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { useProfile } from '../features/profile/ProfileContext';
 import { useAuth } from '../features/auth/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { VoiceAssistIcon } from '../components/VoiceAssistIcon';
+import { accessError } from '../features/permissions/accessErrors';
+import { requestMediaAccess } from '../features/permissions/mediaAccess';
+import { MAP_DROID_VISIBILITY_EVENT, readMapDroidVisible } from '../features/cuboAI/droidPreference';
 
 const fallbackRegion: Region = { latitude: 35.7796, longitude: -78.6382, latitudeDelta: .035, longitudeDelta: .035 };
 const hazardMeta: Record<RoadHazardKind, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
@@ -84,6 +88,10 @@ function projectAhead(point: Coordinate, heading: number, meters: number): Coord
   const nextLatitude = Math.asin(Math.sin(latitude) * Math.cos(distance) + Math.cos(latitude) * Math.sin(distance) * Math.cos(bearing));
   const nextLongitude = longitude + Math.atan2(Math.sin(bearing) * Math.sin(distance) * Math.cos(latitude), Math.cos(distance) - Math.sin(latitude) * Math.sin(nextLatitude));
   return { latitude: nextLatitude * 180 / Math.PI, longitude: nextLongitude * 180 / Math.PI };
+}
+
+function spokenDestination(text: string) {
+  return text.replace(/^\s*(?:hey\s+cubo[, ]*)?/i, '').replace(/^\s*(?:take me to|navigate to|directions to|find|search for|go to)\s+/i, '').trim().slice(0, 240);
 }
 
 export function MapScreen() {
@@ -150,7 +158,34 @@ export function MapScreen() {
   const idleSheetProgress = useRef(new Animated.Value(1)).current;
   const idleSheetDragStart = useRef(1);
   const [voiceStatus, setVoiceStatus] = useState('');
+  const [mapVoiceOpen, setMapVoiceOpen] = useState(false); const [mapVoiceListening, setMapVoiceListening] = useState(false);
+  const [mapVoiceConsent, setMapVoiceConsent] = useState(false); const [mapVoiceMessage, setMapVoiceMessage] = useState('Say where you want to go.');
+  const [mapMicRecovery, setMapMicRecovery] = useState(false); const [mapMicRetrying, setMapMicRetrying] = useState(false); const [mapVoiceError, setMapVoiceError] = useState('');
+  const mapVoice = useRef<CuboAIVoice | null>(null); const mapMicRecoveryShown = useRef(false); const mapVoiceApproved = useRef(false);
+  const mapVoiceState = useRef({ focused, active: !!activeSession, open: mapVoiceOpen }); mapVoiceState.current = { focused, active: !!activeSession, open: mapVoiceOpen };
+  const mapVoiceAllowed = () => mapVoiceState.current.focused && !mapVoiceState.current.active && mapVoiceState.current.open && !document.hidden;
+  const [mapDroidVisible, setMapDroidVisible] = useState(() => { try { return user ? readMapDroidVisible(localStorage, user.uid) : false; } catch { return false; } });
+  const idleSheetScrollY = useRef(0);
   useEffect(() => { setVoiceStatus(''); }, [activeSession?.id, focused]);
+  useEffect(() => {
+    mapVoice.current?.dispose();
+    mapVoice.current = new CuboAIVoice(mapVoiceAllowed, () => user ? readVoicePreference(localStorage, user.uid) : '');
+    return () => { mapVoice.current?.dispose(); mapVoice.current = null; };
+  }, [user?.uid]);
+  useEffect(() => {
+    if (!activeSession && focused) return;
+    mapVoice.current?.stop(); setMapVoiceOpen(false); setMapVoiceListening(false); setMapVoiceConsent(false); setMapMicRecovery(false);
+  }, [activeSession?.id, focused]);
+  useEffect(() => {
+    if (!user) { setMapDroidVisible(false); return; }
+    const sync = (event?: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; visible?: boolean }> | undefined)?.detail;
+      if (detail?.uid === user.uid && typeof detail.visible === 'boolean') setMapDroidVisible(detail.visible);
+      else try { setMapDroidVisible(readMapDroidVisible(localStorage, user.uid)); } catch {}
+    };
+    sync(); window.addEventListener('storage', sync); window.addEventListener(MAP_DROID_VISIBILITY_EVENT, sync);
+    return () => { window.removeEventListener('storage', sync); window.removeEventListener(MAP_DROID_VISIBILITY_EVENT, sync); };
+  }, [user?.uid]);
   const distanceBaseline = useRef(0);
   const [following, setFollowing] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
@@ -258,18 +293,56 @@ export function MapScreen() {
     }
   };
 
-  const search = async () => {
-    const clean = query.trim(); if (!clean || searching || routing) return;
+  const search = async (requestedQuery?: string, fromVoice = false) => {
+    const clean = (requestedQuery ?? query).trim(); if (!clean || searching || routing) return;
+    if (requestedQuery != null) setQuery(clean);
     dismissSearchKeyboard();
     setSearching(true); setSearchMessage('');
     try {
       const [result] = await searchPlaces(clean, gps.point);
-      if (!result) { setSearchMessage('No place found'); return; }
+      if (!result) { setSearchMessage('No place found'); if (fromVoice) { setMapVoiceMessage(`I couldn't find ${clean}. Try a street address or place name.`); mapVoice.current?.speak(`I couldn't find ${clean}. Try a street address or place name.`); } return; }
       const destination = { latitude: result.latitude, longitude: result.longitude };
       remember(result); setQuery(result.title); setNavigationRoute(null); setSearchResult(destination); setSuggestions([]);
+      if (fromVoice) { const reply = `Showing ${result.title} on the map.`; setMapVoiceMessage(reply); mapVoice.current?.speak(reply); }
       // The route effect runs after the destination and GPS are both ready.
-    } catch { setSearchMessage('Search unavailable'); } finally { setSearching(false); }
+    } catch { setSearchMessage('Search unavailable'); if (fromVoice) { setMapVoiceMessage('Map search is unavailable right now.'); mapVoice.current?.speak('Map search is unavailable right now.'); } } finally { setSearching(false); }
   };
+  function closeMapVoice() { mapVoice.current?.stop(); setMapVoiceOpen(false); setMapVoiceListening(false); setMapVoiceConsent(false); setMapMicRecovery(false); }
+  function openMapVoice() {
+    if (mapVoiceOpen) { closeMapVoice(); return; }
+    setMapVoiceOpen(true); setMapVoiceError(''); setMapVoiceMessage('Say where you want to go.');
+  }
+  function askMapVoice() {
+    if (!mapVoiceOpen || activeSession) return;
+    if (!mapVoiceApproved.current) { setMapVoiceConsent(true); return; }
+    startMapListening();
+  }
+  function recoverMapMicrophone(message: string) {
+    setMapVoiceListening(false);
+    if (isRecoverableMicrophoneFailure(message) && !mapMicRecoveryShown.current) {
+      mapMicRecoveryShown.current = true; setMapVoiceError(''); setMapMicRecovery(true); setMapVoiceMessage('Microphone access needs a quick check.');
+    } else setMapVoiceError(message);
+  }
+  function startMapListening() {
+    if (!mapVoiceAllowed() || !mapVoice.current) return;
+    mapVoice.current.stop(); setMapVoiceConsent(false); setMapMicRecovery(false); setMapVoiceError(''); setMapVoiceListening(true); setMapVoiceMessage('Listening… say a destination.');
+    try {
+      mapVoice.current.listen(true, text => {
+        if (!mapVoiceAllowed()) return;
+        setMapVoiceListening(false);
+        const destination = spokenDestination(text);
+        if (!destination) { recoverMapMicrophone('Voice input stopped (no-speech). Check microphone access and try again.'); return; }
+        setMapVoiceMessage(`Looking for ${destination}…`); void search(destination, true);
+      }, recoverMapMicrophone, () => setMapVoiceListening(false));
+    } catch (cause) { recoverMapMicrophone(cause instanceof Error ? cause.message : 'Voice recognition unavailable.'); }
+  }
+  async function enableMapMicrophoneAndRetry() {
+    if (mapMicRetrying) return;
+    setMapMicRetrying(true); setMapVoiceError('');
+    try { await requestMediaAccess('microphone'); setMapMicRecovery(false); if (mapVoiceAllowed()) startMapListening(); }
+    catch (cause) { setMapMicRecovery(false); setMapVoiceError(accessError(cause)); }
+    finally { setMapMicRetrying(false); }
+  }
   useEffect(() => { if (suggestionError) setSearchMessage(suggestionError); }, [suggestionError]);
 
   const chooseSuggestion = async (suggestion: PlaceSuggestion) => {
@@ -440,28 +513,36 @@ export function MapScreen() {
   const idleSheetCollapsedHeight = 96;
   const idleSheetTravel = Math.max(1, idleSheetMaxHeight - idleSheetCollapsedHeight);
   const idleSheetPan = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => !activeSession && Math.abs(gesture.dy) > Math.abs(gesture.dx) && Math.abs(gesture.dy) > 5,
-    onMoveShouldSetPanResponderCapture: (_, gesture) => !activeSession && Math.abs(gesture.dy) > Math.abs(gesture.dx) && Math.abs(gesture.dy) > 7,
+    onMoveShouldSetPanResponder: (_, gesture) => !activeSession && Math.abs(gesture.dy) > Math.abs(gesture.dx) && Math.abs(gesture.dy) > 5 && (!idleSheetExpanded || (gesture.dy > 0 && idleSheetScrollY.current <= 1)),
+    onMoveShouldSetPanResponderCapture: (_, gesture) => !activeSession && Math.abs(gesture.dy) > Math.abs(gesture.dx) && Math.abs(gesture.dy) > 7 && (!idleSheetExpanded || (gesture.dy > 0 && idleSheetScrollY.current <= 1)),
     onPanResponderGrant: () => idleSheetProgress.stopAnimation(value => { idleSheetDragStart.current = value; }),
     onPanResponderMove: (_, gesture) => idleSheetProgress.setValue(Math.max(0, Math.min(1, idleSheetDragStart.current - gesture.dy / idleSheetTravel))),
     onPanResponderRelease: (_, gesture) => {
       const resting = Math.max(0, Math.min(1, idleSheetDragStart.current - gesture.dy / idleSheetTravel));
       const expanded = gesture.vy < -.3 ? true : gesture.vy > .3 ? false : resting >= .5;
       setIdleSheetExpanded(expanded);
-      Animated.timing(idleSheetProgress, { toValue: expanded ? 1 : 0, duration: 280, easing: value => 1 - Math.pow(1 - value, 3), useNativeDriver: false }).start();
+      Animated.spring(idleSheetProgress, { toValue: expanded ? 1 : 0, damping: 28, stiffness: 310, mass: .78, overshootClamping: true, useNativeDriver: false }).start();
     },
     onPanResponderTerminationRequest: () => false,
-    onPanResponderTerminate: () => Animated.timing(idleSheetProgress, { toValue: idleSheetExpanded ? 1 : 0, duration: 220, useNativeDriver: false }).start(),
+    onPanResponderTerminate: () => Animated.spring(idleSheetProgress, { toValue: idleSheetExpanded ? 1 : 0, damping: 28, stiffness: 310, mass: .78, overshootClamping: true, useNativeDriver: false }).start(),
   }), [activeSession, idleSheetExpanded, idleSheetProgress, idleSheetTravel]);
   useEffect(() => {
-    const animation = Animated.timing(idleSheetProgress, { toValue: idleSheetExpanded ? 1 : 0, duration: reducedMotion ? 0 : 300, easing: value => 1 - Math.pow(1 - value, 3), useNativeDriver: false });
+    const animation = reducedMotion
+      ? Animated.timing(idleSheetProgress, { toValue: idleSheetExpanded ? 1 : 0, duration: 0, useNativeDriver: false })
+      : Animated.spring(idleSheetProgress, { toValue: idleSheetExpanded ? 1 : 0, damping: 30, stiffness: 290, mass: .8, overshootClamping: true, useNativeDriver: false });
     animation.start();
     return () => animation.stop();
   }, [idleSheetExpanded, idleSheetProgress, reducedMotion]);
   useEffect(() => { if (navigationRoute || searchFocused) setIdleSheetExpanded(true); }, [navigationRoute, searchFocused]);
-  const sheetContent = (children: React.ReactNode) => activeSession ? children : <ScrollView scrollEnabled={idleSheetExpanded} style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator>{children}</ScrollView>;
+  const sheetContent = (children: React.ReactNode) => activeSession ? children : <ScrollView scrollEnabled={idleSheetExpanded} onScroll={event => { idleSheetScrollY.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator>{children}</ScrollView>;
   const idleSheetExpandedStyle = { maxHeight: idleSheetMaxHeight };
   const idleSheetAnimatedStyle = !activeSession ? { maxHeight: idleSheetProgress.interpolate({ inputRange: [0, 1], outputRange: [idleSheetCollapsedHeight, idleSheetExpandedStyle.maxHeight] }) } : undefined;
+  const leaveMap = () => {
+    dismissSearchKeyboard(); closeMapVoice();
+    if (screenRoute.name === 'Map') navigation.navigate('MainTabs', { screen: 'Home' });
+    else if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('MainTabs', { screen: 'Home' });
+  };
 
   return <View style={styles.root} onLayout={event => { const { width, height } = event.nativeEvent.layout; setSize({ width, height }); }}>
     <MapView ref={mapRef} style={[StyleSheet.absoluteFill, { zIndex: 0 }]} initialRegion={fallbackRegion} attributionBottom={bottomCardHeight + insets.bottom + (!activeSession && screenRoute.name === 'Map' ? 112 : 24)} userLocation={gps.hasFix ? gps.point : null} showsUserLocation={gps.hasFix && !navigating} showsMyLocationButton={false} showsCompass={false} toolbarEnabled={false} userInterfaceStyle={mode} onPress={dismissSearchKeyboard} onPanDrag={() => { dismissSearchKeyboard(); if (navigating) setFollowing(false); }}>
@@ -472,15 +553,18 @@ export function MapScreen() {
       {hazards.map((hazard) => { const meta = hazardMeta[hazard.hazardKind ?? 'object']; return <Marker key={hazard.id} coordinate={{ latitude: hazard.latitude!, longitude: hazard.longitude! }} title={hazard.title} description={hazard.detail}><View style={[styles.hazardPin, { backgroundColor: meta.color }]}><Ionicons name={meta.icon} size={16} color="#fff" /></View></Marker>; })}
     </MapView>
     <SafeAreaView edges={['top', 'bottom']} style={[styles.overlay, !activeSession && screenRoute.name === 'Map' && { paddingBottom: 100 }, activeSession && styles.overlayDrive]} pointerEvents="box-none">
-      {!activeSession && <View style={styles.mapUtilities}><MotionPressable accessibilityLabel="Notifications" style={styles.utilityButton} onPress={() => navigation.navigate('Notifications')}><Ionicons name="notifications-outline" size={22} color={colors.text} /></MotionPressable><MotionPressable accessibilityLabel="Your account" style={styles.utilityButton} onPress={() => navigation.navigate('MainTabs', { screen: 'Account' })}><ProfileAvatar avatarId={profile.avatarId} photoUri={profile.photoUri} uid={user?.uid} size={44} rounded /></MotionPressable>{compactMap && <><MotionPressable accessibilityLabel="Ask Cubo Assistant" style={styles.utilityButton} onPress={() => navigation.navigate('CuboAI')}><Ionicons name="mic-outline" size={24} color={colors.accent} /></MotionPressable><MotionPressable accessibilityLabel="Follow my location" style={styles.utilityButton} onPress={() => { dismissSearchKeyboard(); recenter(); }}><Ionicons name="locate" size={21} color={colors.text} /></MotionPressable></>}</View>}
-      {!activeSession && !compactMap && <MotionPressable accessibilityLabel="Ask Cubo Assistant" style={[styles.recenter, { bottom: bottomCardHeight + insets.bottom + (screenRoute.name === 'Map' ? 168 : 80) }]} onPress={() => navigation.navigate('CuboAI')}><Ionicons name="mic-outline" size={24} color={colors.accent} /></MotionPressable>}
+      {!activeSession && <MotionPressable accessibilityLabel="Back from Map" style={styles.mapBack} onPress={leaveMap}><Ionicons name="arrow-back" size={22} color={colors.text} /></MotionPressable>}
+      {!activeSession && <View style={styles.mapUtilities}><MotionPressable accessibilityLabel="Notifications" style={styles.utilityButton} onPress={() => navigation.navigate('Notifications')}><Ionicons name="notifications-outline" size={22} color={colors.text} /></MotionPressable><MotionPressable accessibilityLabel="Your account" style={styles.utilityButton} onPress={() => navigation.navigate('MainTabs', { screen: 'Account' })}><ProfileAvatar avatarId={profile.avatarId} photoUri={profile.photoUri} uid={user?.uid} size={44} rounded /></MotionPressable>{compactMap && <><MotionPressable accessibilityLabel={mapVoiceOpen ? 'Close Map Voice Assist' : 'Open Map Voice Assist'} accessibilityState={{ expanded: mapVoiceOpen }} style={[styles.utilityButton, mapVoiceOpen && styles.voiceButtonActive]} onPress={openMapVoice}><VoiceAssistIcon size={25} color={mapVoiceOpen ? colors.onAccent : colors.accent} /></MotionPressable><MotionPressable accessibilityLabel="Follow my location" style={styles.utilityButton} onPress={() => { dismissSearchKeyboard(); recenter(); }}><Ionicons name="locate" size={21} color={colors.text} /></MotionPressable></>}</View>}
+      {!activeSession && !compactMap && <MotionPressable accessibilityLabel={mapVoiceOpen ? 'Close Map Voice Assist' : 'Open Map Voice Assist'} accessibilityState={{ expanded: mapVoiceOpen }} style={[styles.recenter, mapVoiceOpen && styles.voiceButtonActive, { bottom: bottomCardHeight + insets.bottom + (screenRoute.name === 'Map' ? 168 : 80) }]} onPress={openMapVoice}><VoiceAssistIcon size={25} color={mapVoiceOpen ? colors.onAccent : colors.accent} /></MotionPressable>}
+      {!activeSession && mapVoiceOpen ? <View style={styles.mapVoiceCard}><View style={styles.mapVoiceTop}><View style={[styles.mapVoiceIcon, mapVoiceListening && styles.mapVoiceIconListening]}><VoiceAssistIcon size={24} color={colors.onAccent} /></View><View style={styles.fill}><Text style={styles.mapVoiceTitle}>Cubo Voice Assist</Text><Text accessibilityLiveRegion="polite" style={styles.mapVoiceBody}>{mapVoiceMessage}</Text></View><Pressable accessibilityLabel="Close Map Voice Assist" style={styles.mapVoiceClose} onPress={closeMapVoice}><Ionicons name="close" size={18} color={colors.textSecondary} /></Pressable></View>{mapVoiceError ? <Text accessibilityRole="alert" style={styles.mapVoiceError}>{mapVoiceError}</Text> : null}<MotionPressable style={[styles.mapVoiceAction, mapVoiceListening && styles.mapVoiceActionListening]} onPress={mapVoiceListening ? () => { mapVoice.current?.stop(); setMapVoiceListening(false); setMapVoiceMessage('Listening stopped.'); } : askMapVoice}><Ionicons name={mapVoiceListening ? 'stop' : 'mic'} size={18} color={colors.onAccent} /><Text style={styles.mapVoiceActionText}>{mapVoiceListening ? 'Stop listening' : 'Speak a destination'}</Text></MotionPressable></View> : null}
+      {!activeSession && mapDroidVisible ? <View pointerEvents="none" style={[styles.mapDroid, { bottom: bottomCardHeight + insets.bottom + (screenRoute.name === 'Map' ? 116 : 28) }]}><View style={styles.mapDroidGlow} /><Image source={require('../../assets/assistant/cubo-droid.png')} resizeMode="contain" style={styles.mapDroidImage} /></View> : null}
       {activeSession ? <View style={[styles.guidanceCard, navigationNotice === 'arrived' && styles.guidanceArrived]} onLayout={event => setTopCardBottom(event.nativeEvent.layout.y + event.nativeEvent.layout.height)}><View style={[styles.maneuverIcon, navigationNotice === 'arrived' && styles.maneuverArrived]}><Ionicons name={navigationNotice === 'arrived' || currentStep?.type === 'arrive' ? 'flag' : currentStep?.modifier?.includes('left') ? 'arrow-back' : currentStep?.modifier?.includes('right') ? 'arrow-forward' : 'arrow-up'} size={25} color={colors.onAccent} /></View><View style={styles.fill}><Text accessibilityLiveRegion="polite" style={styles.stepDistance}>{navigationNotice === 'rerouting' ? 'RECALCULATING ROUTE' : navigationNotice === 'updated' ? 'NEW ROUTE READY' : navigationNotice === 'arrived' ? 'DESTINATION REACHED' : formatStepDistance(gps.point && currentStep ? distanceMeters(gps.point, currentStep.location) : currentStep?.distanceMeters)}</Text><Text numberOfLines={2} style={styles.instruction}>{navigationNotice === 'rerouting' ? 'Finding the best way back…' : navigationNotice === 'arrived' ? `Arrived at ${query || 'your destination'}` : stepInstruction(currentStep)}</Text></View><Pressable accessibilityLabel={pipHidden ? 'Show camera' : 'Hide camera'} onPress={() => setPipHidden((value) => !value)} style={styles.closeNavigation}><Ionicons name={pipHidden ? 'videocam-outline' : 'videocam-off-outline'} size={19} color={colors.accent} /></Pressable></View> : null}
       {activeSession && focused ? <Animated.View pointerEvents={pipHidden ? 'none' : 'auto'} style={[styles.cameraPip, { opacity: pipHidden ? 0 : 1, transform: pipPosition.getTranslateTransform() }]} {...pipPan.panHandlers}><Pressable accessibilityLabel="Drag camera to a corner" style={StyleSheet.absoluteFill} onPress={() => setPipHidden(true)}><DriveAttentionCamera speedMph={gps.speedMph} gpsValid={gps.speedAvailable} /><View pointerEvents="none" style={styles.pipShade} /><View style={styles.pipLabel}><View style={styles.pipDot} /><Text style={styles.pipText}>DRAG TO A CORNER</Text></View><Pressable accessibilityLabel="Hide camera" onPress={() => setPipHidden(true)} style={{ position: 'absolute', right: 4, top: 4, width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,.45)', borderRadius: 12 }}><Ionicons name="remove" size={20} color="#FFFFFF" /></Pressable></Pressable></Animated.View> : null}
 
       {(activeSession || !compactMap) && <MotionPressable accessibilityLabel="Follow my location" accessibilityState={{ selected: !!activeSession && following }} style={[styles.recenter, !activeSession && { bottom: bottomCardHeight + insets.bottom + (screenRoute.name === 'Map' ? 112 : 24) }, activeSession && following && styles.recenterActive, activeSession && { bottom: bottomCardHeight + insets.bottom + 26, right: pipAtBottomRight && !pipHidden ? undefined : 16, left: pipAtBottomRight && !pipHidden ? 16 : undefined }]} scaleTo={0.9} onPress={() => { dismissSearchKeyboard(); recenter(); }}><Ionicons name="locate" size={21} color={activeSession && following ? colors.onAccent : colors.text} /></MotionPressable>}
-      <Animated.View style={[styles.bottomCard, activeSession && styles.bottomCardDrive, !activeSession && styles.bottomCardIdle, idleSheetAnimatedStyle]} onLayout={(event) => setBottomCardHeight(event.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.bottomCard, activeSession && styles.bottomCardDrive, !activeSession && styles.bottomCardIdle, idleSheetAnimatedStyle]} onLayout={(event) => setBottomCardHeight(event.nativeEvent.layout.height)} {...idleSheetPan.panHandlers}>
         {sheetContent(<>
-        {!activeSession ? <Pressable accessibilityRole="button" accessibilityLabel={idleSheetExpanded ? 'Swipe down or tap to collapse destination panel' : 'Swipe up or tap to expand destination panel'} onPress={() => setIdleSheetExpanded(value => !value)} style={styles.grabberTouch} {...idleSheetPan.panHandlers} /> : null}
+        {!activeSession ? <Pressable accessibilityRole="button" accessibilityLabel={idleSheetExpanded ? 'Swipe down or tap to collapse destination panel' : 'Swipe up or tap to expand destination panel'} onPress={() => setIdleSheetExpanded(value => !value)} style={styles.grabberTouch} /> : null}
         {!activeSession && <><View style={styles.grabber} /><View style={styles.topCard}><View style={styles.searchRow}><Ionicons name="search" size={19} color={colors.textSecondary} /><TextInput ref={searchInputRef} value={query} onFocus={() => { setSearchFocused(true); setShowRecent(!query.trim() || !!searchResult); }} onBlur={() => setSearchFocused(false)} onChangeText={(value) => { setShowRecent(!value.trim()); setQuery(value); setSearchResult(null); setNavigationRoute(null); setSearchMessage(''); }} onSubmitEditing={() => void search()} returnKeyType="search" placeholder="Where are you going?" placeholderTextColor={colors.textTertiary} style={styles.searchInput} />{query ? <Pressable accessibilityLabel="Clear search" onPress={() => { setQuery(''); setSearchResult(null); setNavigationRoute(null); setSearchMessage(''); setSuggestions([]); }} style={styles.inputAction}><Ionicons name="close-circle" size={19} color={colors.textTertiary} /></Pressable> : null}{searchFocused ? <Pressable accessibilityLabel="Hide keyboard" onPress={dismissSearchKeyboard} style={styles.inputAction}><Ionicons name="chevron-down" size={18} color={colors.textSecondary} /></Pressable> : null}<Pressable disabled={!query.trim() || searching || routing} onPress={() => void search()} style={[styles.searchButton, (!query.trim() || searching || routing) && styles.searchDisabled]}><Ionicons name={searching || suggesting || routing ? 'hourglass-outline' : 'arrow-forward'} size={15} color={colors.onAccent} /></Pressable></View>{searching || routing ? <View style={styles.searchStatus}><View style={styles.statusDot} /><Text style={styles.statusText}>{routing ? 'Building your route…' : 'Finding that place…'}</Text></View> : null}{showRecent && <RecentDestinations places={recent} onSelect={place => { setShowRecent(false); void chooseSuggestion(place); }} />}{!showRecent && suggestions.length ? <ScrollView style={[styles.suggestions, { maxHeight: Math.min(220, height * .28) }]} keyboardShouldPersistTaps="always" nestedScrollEnabled>{suggestions.map((suggestion, index) => <Pressable key={suggestion.id} onPress={() => void chooseSuggestion(suggestion)} style={[styles.suggestion, index === suggestions.length - 1 && styles.suggestionLast]}><View style={styles.suggestionIcon}><Ionicons name="location" size={17} color={colors.accent} /></View><View style={styles.fill}><Text numberOfLines={1} style={styles.suggestionTitle}>{suggestion.title}</Text><Text numberOfLines={2} style={styles.suggestionSubtitle}>{suggestion.subtitle || 'Tap to view this location'}</Text></View><Ionicons name="chevron-forward" size={16} color={colors.textTertiary} /></Pressable>)}</ScrollView> : null}</View>
           {!query.trim() && !suggestions.length && (!showRecent || !recent.length) && <View style={styles.savedPlaces}>
             {([{ kind: 'home', title: 'Home', icon: 'home-outline', place: home }, { kind: 'work', title: 'Work', icon: 'briefcase-outline', place: work }] as const).map(item => <MotionPressable key={item.kind} style={styles.savedRow} onPress={() => item.place ? void chooseSuggestion(item.place) : navigation.navigate('SavedPlace', { kind: item.kind })}><Ionicons name={item.icon} size={23} color={colors.accent} /><View style={styles.fill}><Text style={styles.suggestionTitle}>{item.title}</Text><Text numberOfLines={1} style={styles.suggestionSubtitle}>{item.place?.title || 'Set address'}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.textTertiary} /></MotionPressable>)}
@@ -498,6 +582,8 @@ export function MapScreen() {
         </>)}
       </Animated.View>
     </SafeAreaView>
+    <Modal visible={mapVoiceConsent} transparent animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => setMapVoiceConsent(false)}><View style={styles.voiceScrim}><View accessibilityViewIsModal style={styles.voiceDialog}><View style={styles.voiceDialogHero}><VoiceAssistIcon size={30} color={colors.onAccent} /></View><Text style={styles.voiceDialogEyebrow}>MAP VOICE ASSIST</Text><Text style={styles.voiceDialogTitle}>Speak without leaving Map</Text><Text style={styles.voiceDialogBody}>Say a place or address and CUBO will search it here. Your browser may process speech online; CUBO does not save raw audio.</Text><MotionPressable style={styles.voiceDialogPrimary} onPress={() => { mapVoiceApproved.current = true; setMapVoiceConsent(false); requestAnimationFrame(startMapListening); }}><Text style={styles.voiceDialogPrimaryText}>Start listening</Text></MotionPressable><Pressable style={styles.voiceDialogSecondary} onPress={() => setMapVoiceConsent(false)}><Text style={styles.voiceDialogSecondaryText}>Not now</Text></Pressable></View></View></Modal>
+    <Modal visible={mapMicRecovery} transparent animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => setMapMicRecovery(false)}><View style={styles.voiceScrim}><View accessibilityViewIsModal style={styles.voiceDialog}><View style={styles.voiceDialogHero}><Ionicons name="mic-outline" size={30} color={colors.onAccent} /></View><Text style={styles.voiceDialogEyebrow}>MICROPHONE CHECK</Text><Text style={styles.voiceDialogTitle}>Enable your microphone</Text><Text style={styles.voiceDialogBody}>CUBO did not detect usable audio. Open the browser permission prompt, then Map Voice Assist will retry once.</Text><MotionPressable style={styles.voiceDialogPrimary} disabled={mapMicRetrying} onPress={() => void enableMapMicrophoneAndRetry()}><Text style={styles.voiceDialogPrimaryText}>{mapMicRetrying ? 'Checking microphone…' : 'Enable microphone & retry'}</Text></MotionPressable><Pressable disabled={mapMicRetrying} style={styles.voiceDialogSecondary} onPress={() => setMapMicRecovery(false)}><Text style={styles.voiceDialogSecondaryText}>Not now</Text></Pressable></View></View></Modal>
     {hazardMenu ? <><Pressable style={styles.sheetBackdrop} onPress={() => setHazardMenu(false)} /><Reanimated.View entering={FadeInDown.duration(240).easing(Easing.out(Easing.cubic))} exiting={FadeOutDown.duration(180)} style={[styles.hazardSheet, { paddingBottom: Math.max(insets.bottom + 18, 34) }]}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><View><Text style={styles.sheetEyebrow}>LIVE ROAD REPORT</Text><Text style={styles.sheetTitle}>What’s ahead?</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Close hazard report" style={styles.sheetClose} onPress={() => setHazardMenu(false)}><Ionicons name="close" size={18} color={colors.text} /></Pressable></View><Text style={styles.sheetBody}>CUBO pins the report at your current GPS position for this drive.</Text><View style={styles.hazardGrid}>{hazardOptions.map((option) => { const meta = hazardMeta[option.kind]; return <MotionPressable key={option.kind} style={styles.hazardOption} scaleTo={0.94} onPress={() => reportHazard(option.kind)}><View style={[styles.hazardOptionIcon, { backgroundColor: `${meta.color}18` }]}><Ionicons name={meta.icon} size={23} color={meta.color} /></View><Text style={styles.hazardOptionLabel}>{option.label}</Text><Text style={styles.hazardOptionDetail}>{option.detail}</Text></MotionPressable>; })}</View></Reanimated.View></> : null}
     <DriveBlockModal plan={driveBlockPlan} onClose={() => setDriveBlockPlan(null)} />
   </View>;
@@ -507,12 +593,16 @@ const makeStyles = (c: AppColors) => StyleSheet.create({
   bottomCardIdle: { marginTop: 'auto', borderRadius: 28, paddingTop: 12, paddingHorizontal: 18, paddingBottom: 16 },
   grabberTouch: { position: 'absolute', zIndex: 30, top: 0, left: 0, right: 0, height: 34 },
   savedPlaces: { marginTop: 8 }, savedRow: { flexDirection: 'row', gap: 15, alignItems: 'center', minHeight: 58, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
-  mapUtilities: { position: 'absolute', right: 18, top: 18, flexDirection: 'row', gap: 10 }, utilityButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadow, shadowOpacity: .15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  mapBack: { position: 'absolute', left: 18, top: 18, width: 48, height: 48, borderRadius: 24, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadow, shadowOpacity: .15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, zIndex: 13 },
+  mapUtilities: { position: 'absolute', right: 18, top: 18, flexDirection: 'row', gap: 10, zIndex: 13 }, utilityButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadow, shadowOpacity: .15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }, voiceButtonActive: { backgroundColor: c.accent, borderColor: c.accent },
+  mapVoiceCard: { position: 'absolute', zIndex: 12, top: 78, right: 18, width: 264, padding: 14, borderRadius: 22, backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.borderStrong, shadowColor: c.shadow, shadowOpacity: .22, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } }, mapVoiceTop: { flexDirection: 'row', alignItems: 'center', gap: 10 }, mapVoiceIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }, mapVoiceIconListening: { shadowColor: c.accent, shadowOpacity: .42, shadowRadius: 12 }, mapVoiceTitle: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 14 }, mapVoiceBody: { color: c.textSecondary, fontSize: 10, lineHeight: 14, marginTop: 2 }, mapVoiceClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center' }, mapVoiceError: { color: c.danger, fontSize: 10, lineHeight: 14, marginTop: 10 }, mapVoiceAction: { minHeight: 44, borderRadius: 15, backgroundColor: c.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 12 }, mapVoiceActionListening: { opacity: .86 }, mapVoiceActionText: { color: c.onAccent, fontFamily: 'Manrope_700Bold', fontSize: 12 },
+  mapDroid: { position: 'absolute', left: 18, zIndex: 8, width: 82, height: 88, alignItems: 'center', justifyContent: 'center' }, mapDroidImage: { width: 76, height: 76, zIndex: 2 }, mapDroidGlow: { position: 'absolute', width: 70, height: 70, borderRadius: 35, backgroundColor: c.accentSoft, opacity: .72 },
   root: { flex: 1, minHeight: 0, backgroundColor: c.background }, overlay: { flex: 1, zIndex: 1, paddingHorizontal: spacing.md, paddingBottom: 12 }, overlayDrive: { paddingBottom: 12 }, fill: { flex: 1 },
   topCard: { zIndex: 10, gap: 8 }, searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58, paddingHorizontal: 12, borderRadius: 16, backgroundColor: c.surfaceMuted }, searchInput: { flex: 1, minWidth: 0, color: c.text, fontFamily: 'Manrope_600SemiBold', fontSize: 17, paddingVertical: 8 }, inputAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, searchButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }, searchDisabled: { opacity: .35 }, searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 4, paddingBottom: 2 }, statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent }, statusText: { color: c.textSecondary, fontFamily: 'Manrope_600SemiBold', fontSize: 9 },
   guidanceCard: { minHeight: 82, borderRadius: 20, backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: c.shadow, shadowOpacity: .2, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }, guidanceArrived: { borderColor: c.accent, backgroundColor: c.accentSoft }, maneuverIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }, maneuverArrived: { borderRadius: 23 }, stepDistance: { color: c.accent, fontFamily: 'Manrope_800ExtraBold', fontSize: 11 }, instruction: { color: c.text, fontFamily: 'Manrope_700Bold', fontSize: 14, lineHeight: 18, marginTop: 2 }, closeNavigation: { width: 44, height: 44, borderRadius: 11, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
   suggestions: { maxHeight: 220, borderRadius: 15, backgroundColor: c.surfaceMuted, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }, suggestion: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }, suggestionLast: { borderBottomWidth: 0 }, suggestionIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }, suggestionTitle: { color: c.text, fontFamily: 'Manrope_700Bold', fontSize: 14 }, suggestionSubtitle: { color: c.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 3 },
   recenter: { position: 'absolute', right: spacing.md, bottom: 300, width: 46, height: 46, borderRadius: 23, backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadow, shadowOpacity: .14, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } }, recenterActive: { backgroundColor: c.accent, borderColor: c.accent },
+  voiceScrim: { flex: 1, backgroundColor: 'rgba(0,0,0,.58)', justifyContent: 'center', padding: 24 }, voiceDialog: { width: '100%', maxWidth: 420, alignSelf: 'center', padding: 24, borderRadius: 26, backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.borderStrong }, voiceDialogHero: { width: 64, height: 64, borderRadius: 32, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent, marginBottom: 16, shadowColor: c.accent, shadowOpacity: .24, shadowRadius: 16 }, voiceDialogEyebrow: { color: c.accent, textAlign: 'center', fontFamily: 'Manrope_800ExtraBold', fontSize: 9, letterSpacing: 1.1 }, voiceDialogTitle: { color: c.text, textAlign: 'center', fontFamily: 'Manrope_800ExtraBold', fontSize: 22, marginTop: 7 }, voiceDialogBody: { color: c.textSecondary, textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 10 }, voiceDialogPrimary: { minHeight: 50, borderRadius: 16, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', marginTop: 20 }, voiceDialogPrimaryText: { color: c.onAccent, fontFamily: 'Manrope_700Bold', fontSize: 13 }, voiceDialogSecondary: { minHeight: 46, alignItems: 'center', justifyContent: 'center', marginTop: 4 }, voiceDialogSecondaryText: { color: c.textSecondary, fontFamily: 'Manrope_700Bold', fontSize: 13 },
   cameraPip: { position: 'absolute', left: 0, top: 0, zIndex: 6, width: 112, height: 148, borderRadius: 20, overflow: 'hidden', backgroundColor: '#080A0D', borderWidth: 2, borderColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: .26, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }, pipShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,.08)' }, pipLabel: { position: 'absolute', left: 7, right: 7, bottom: 7, minHeight: 23, paddingHorizontal: 7, borderRadius: 9, backgroundColor: 'rgba(6,12,10,.72)', flexDirection: 'row', alignItems: 'center', gap: 5 }, pipDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#45D49B' }, pipText: { color: '#FFFFFF', fontFamily: 'Manrope_700Bold', fontSize: 6, letterSpacing: .45 }, pipExpand: { position: 'absolute', top: 8, right: 8, textShadowColor: 'rgba(0,0,0,.5)', textShadowRadius: 4 },
   bottomCard: { marginTop: 'auto', borderRadius: 24, overflow: 'hidden', backgroundColor: c.card, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, padding: 15, shadowColor: '#000', shadowOpacity: .22, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } }, bottomCardDrive: { paddingHorizontal: 18, paddingTop: 13, paddingBottom: 16, borderRadius: 26 }, grabber: { width: 34, height: 4, borderRadius: 2, backgroundColor: c.surfaceMuted, alignSelf: 'center', marginBottom: 12 }, tripRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, tripRowDrive: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }, eyebrow: { color: c.accent, fontFamily: 'Manrope_700Bold', fontSize: 8, letterSpacing: 1 }, cardTitle: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 22, marginTop: 2 }, stats: { flexDirection: 'row', gap: 16 }, statBlock: { minWidth: 48, alignItems: 'center' }, statValue: { color: c.text, fontFamily: 'Manrope_800ExtraBold', fontSize: 14, textAlign: 'center' }, statLabel: { color: c.textTertiary, fontSize: 10, marginTop: 2, textAlign: 'center' }, monitoringRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 9 }, monitoringDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }, monitoringDotError: { backgroundColor: c.danger }, monitoringText: { flex: 1, color: c.textSecondary, fontSize: 11, lineHeight: 16 }, startRoute: { minHeight: 48, borderRadius: 14, backgroundColor: c.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 12 }, startRouteText: { color: c.onAccent, fontFamily: 'Manrope_800ExtraBold', fontSize: 12 }, driveControls: { flexDirection: 'row', gap: 8, marginTop: 2 }, reportHazard: { flex: 1.08, minHeight: 48, borderRadius: 14, backgroundColor: c.accentSoft, borderWidth: StyleSheet.hairlineWidth, borderColor: c.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }, reportHazardText: { color: c.accent, fontFamily: 'Manrope_800ExtraBold', fontSize: 12 }, endDrive: { flex: .92, minHeight: 48, borderRadius: 14, backgroundColor: c.danger, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, shadowColor: c.danger, shadowOpacity: .16, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }, endDriveText: { color: '#FFFFFF', fontFamily: 'Manrope_800ExtraBold', fontSize: 12 }, privacy: { color: c.textTertiary, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 10 },
   driverMarker: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.accent, borderWidth: 4, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: c.shadow, shadowOpacity: .25, shadowRadius: 7 }, destinationPin: { width: 42, height: 48, alignItems: 'center', justifyContent: 'flex-start', shadowColor: '#000000', shadowOpacity: .24, shadowRadius: 6, shadowOffset: { width: 0, height: 4 } }, destinationPinCenter: { position: 'absolute', top: 9, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' }, hazardPin: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },

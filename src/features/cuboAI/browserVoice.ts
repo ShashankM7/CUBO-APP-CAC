@@ -18,6 +18,10 @@ type Recognition = {
 };
 type SpeechWindow = Window & { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
 
+export function isRecoverableMicrophoneFailure(message: string) {
+  return /no-speech|audio-capture|not-allowed|service-not-allowed|microphone|speech access|recognition unavailable|repeatedly interrupted/i.test(message);
+}
+
 /** Push-to-talk only. Transcript is returned to the composer, never submitted automatically. */
 export class CuboAIVoice {
   private recognition: Recognition | null = null;
@@ -58,9 +62,17 @@ export class CuboAIVoice {
           : `Voice input stopped (${event.error}). You can type instead.`);
       ended();
     };
-    recognition.onend = () => { this.stop(); ended(); };
+    recognition.onend = () => {
+      this.stop();
+      if (!this.disposed && this.allowed()) error('Voice input stopped (no-speech). Check microphone access and try again.');
+      ended();
+    };
     try { recognition.start(); } catch (cause) { this.stop(); throw cause; }
-    this.timer = setTimeout(() => { this.stop(); ended(); }, 30000);
+    this.timer = setTimeout(() => {
+      this.stop();
+      if (!this.disposed && this.allowed()) error('Voice input stopped (no-speech). Check microphone access and try again.');
+      ended();
+    }, 30000);
   }
   speak(text: string, completed?: () => void, failed?: () => void) {
     if (this.disposed || !this.allowed()) throw Error('Voice is unavailable for this session.');

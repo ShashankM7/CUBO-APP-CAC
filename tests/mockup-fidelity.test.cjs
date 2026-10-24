@@ -77,9 +77,15 @@ test('idle map has one destination sheet, saved places and no unhelpful back-hom
   assert.match(map, /activeSession && styles\.bottomCardDrive/);
   assert.match(map, /style=\{styles\.monitoringRow\}/);
   assert.match(map, /style=\{styles\.statBlock\}/);
-  assert.match(map, /duration: reducedMotion \? 0 : 300/);
+  assert.match(map, /Animated\.spring\(idleSheetProgress/);
+  assert.match(map, /idleSheetScrollY\.current <= 1/);
+  assert.match(map, /onScroll=\{event => \{ idleSheetScrollY\.current/);
   assert.match(map, /activeSession \? children : <ScrollView/);
   assert.match(map, /!activeSession && !compactMap && <MotionPressable/);
+  assert.match(map, /accessibilityLabel="Back from Map"/);
+  assert.match(map, /Open Map Voice Assist/);
+  assert.match(map, /Speak without leaving Map/);
+  assert.match(map, /readMapDroidVisible/);
 });
 
 test('five primary tabs preserve access to the vehicle garage', () => {
